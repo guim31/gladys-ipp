@@ -105,6 +105,9 @@ export function buildPrinterDevice(gladys, { printer, url }, _config) {
   return {
     name: deviceName(printer, url),
     external_id: ids.device,
+    // Gladys only schedules a poll when should_poll is true: without it the
+    // device is created with the column default (false) and never polled.
+    should_poll: true,
     poll_frequency: DEVICE_POLL_FREQUENCY_MS,
     params: [{ name: PRINTER_URL_PARAM, value: url }],
     features,
@@ -131,20 +134,33 @@ export function buildPrinterStates(gladys, { printer, url }) {
 }
 
 /**
+ * Is this created Gladys device one of our printers? Recognized by the
+ * PRINTER_URL param, the only thing polling needs.
+ * @param {object} device a device returned by gladys.getDevices()
+ * @returns {boolean}
+ */
+export function isPrinterDevice(device) {
+  return (device?.params ?? []).some(
+    (param) => param.name === PRINTER_URL_PARAM && typeof param.value === 'string',
+  );
+}
+
+/**
  * Poll one printer device: query it over IPP and publish the fresh states.
  * When the supplies changed (cartridge swap, renamed supply...), the device
  * is re-published first so the new features exist before their states arrive.
  *
  * Gladys calls this every minute (DEVICE_POLL_FREQUENCY_MS, the slowest value
  * it supports); the ACTUAL IPP query is throttled to config.poll_frequency
- * seconds — ink levels do not need a per-minute refresh.
+ * seconds — ink levels do not need a per-minute refresh. `force` bypasses the
+ * throttle, for the integration's own refresh loop and for a fresh device.
  * @param {object} gladys SDK instance
  * @param {object} device the Gladys device (with params) handed to onPoll
  * @param {{ poll_frequency: number }} config
- * @param {{ fetchAttributes?: typeof getPrinterAttributes, now?: () => number }} [deps] test seam
+ * @param {{ fetchAttributes?: typeof getPrinterAttributes, now?: () => number, force?: boolean }} [deps] test seam
  */
 export async function pollPrinter(gladys, device, config, deps = {}) {
-  const { fetchAttributes = getPrinterAttributes, now = Date.now } = deps;
+  const { fetchAttributes = getPrinterAttributes, now = Date.now, force = false } = deps;
   const url = (device.params ?? []).find((param) => param.name === PRINTER_URL_PARAM)?.value;
   if (!url) {
     throw new Error(`Device ${device.external_id} has no ${PRINTER_URL_PARAM} param`);
@@ -152,7 +168,7 @@ export async function pollPrinter(gladys, device, config, deps = {}) {
 
   const last = lastPollAt.get(device.external_id);
   const intervalMs = Math.max(config.poll_frequency, 60) * 1000;
-  if (last !== undefined && now() - last < intervalMs) {
+  if (!force && last !== undefined && now() - last < intervalMs) {
     logger.debug(
       `Poll ${device.external_id} skipped (interval ${config.poll_frequency}s not over)`,
     );

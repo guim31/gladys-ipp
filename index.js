@@ -18,13 +18,24 @@
 import { GladysIntegration, logger } from '@gladysassistant/integration-sdk';
 import { normalizeConfig } from './src/config.js';
 import { discoverPrinters } from './src/discovery.js';
-import { buildPrinterDevice, buildPrinterStates, pollPrinter } from './src/device.js';
+import {
+  buildPrinterDevice,
+  buildPrinterStates,
+  isPrinterDevice,
+  pollPrinter,
+} from './src/device.js';
 import { ACTIONS } from './src/actions.js';
 
 const gladys = new GladysIntegration();
 
 // Current configuration (hot-reloaded via onConfigUpdated).
 let config = normalizeConfig();
+
+// Own refresh loop over the devices the user created. Gladys also polls them
+// (should_poll + poll_frequency), but its scheduler only covers devices
+// created WITH those fields: this loop keeps every printer refreshed at the
+// configured interval, whatever the device record says.
+let refreshTimer = null;
 
 /**
  * Discover the printers (manual list + mDNS), publish them as devices and
@@ -59,10 +70,63 @@ async function discoverAndPublish() {
   return printers.length;
 }
 
+/**
+ * Query every printer the user actually created and publish its states.
+ * @returns {Promise<number>} number of printers refreshed
+ */
+async function refreshCreatedPrinters() {
+  const devices = (await gladys.getDevices()).filter(isPrinterDevice);
+  if (devices.length === 0) {
+    logger.debug('Refresh: no printer device created yet');
+    return 0;
+  }
+  let refreshed = 0;
+  for (const device of devices) {
+    try {
+      // force: this loop IS the schedule, it must not be throttled by the
+      // interval check that protects the (more frequent) Gladys polls.
+      await pollPrinter(gladys, device, config, { force: true });
+      refreshed += 1;
+    } catch (err) {
+      logger.error(`Refresh failed for ${device.external_id}: ${err.message}`);
+    }
+  }
+  return refreshed;
+}
+
+function stopRefreshLoop() {
+  if (refreshTimer !== null) {
+    clearInterval(refreshTimer);
+    refreshTimer = null;
+  }
+}
+
+function startRefreshLoop() {
+  stopRefreshLoop();
+  const intervalMs = Math.max(config.poll_frequency, 60) * 1000;
+  logger.info(`Refresh loop every ${intervalMs / 1000}s`);
+  refreshTimer = setInterval(() => {
+    refreshCreatedPrinters().catch((err) => logger.error('Refresh loop failed', err));
+  }, intervalMs);
+  // Never hold the process alive just for this timer.
+  refreshTimer.unref?.();
+}
+
 // --- Discovery: Gladys asks for the list of devices --------------------------
 gladys.onScanRequest(async () => {
   logger.info('onScanRequest -> discovering printers');
   await discoverAndPublish();
+});
+
+// --- The user just added one of the discovered printers ----------------------
+// Publish its states immediately: the dashboard widget shows real values
+// instead of "no recent value" until the first scheduled refresh.
+gladys.onDeviceCreated(async (device) => {
+  if (!isPrinterDevice(device)) {
+    return;
+  }
+  logger.info(`onDeviceCreated -> first refresh of ${device.external_id}`);
+  await pollPrinter(gladys, device, config, { force: true });
 });
 
 // --- Polling: Gladys asks to refresh a device --------------------------------
@@ -84,6 +148,9 @@ gladys.onConfigUpdated(async (newConfig) => {
   // Re-discover: the manual list or the poll frequency may have changed.
   // publishDiscoveredDevices is idempotent (upsert by external_id).
   await discoverAndPublish();
+  // The interval may have changed: re-arm the loop on the new value.
+  startRefreshLoop();
+  await refreshCreatedPrinters();
 });
 
 // --- Connection lifecycle ----------------------------------------------------
@@ -98,7 +165,13 @@ gladys.on('connected', async () => {
     // 2) Discover and publish the printers as soon as we are connected.
     const count = await discoverAndPublish();
 
-    // 3) Report the application-level status, shown in the Configuration
+    // 3) Refresh the printers the user already created, then keep them fresh
+    // on the configured interval — independently of the Gladys scheduler.
+    const refreshed = await refreshCreatedPrinters();
+    logger.info(`Refreshed ${refreshed} created printer(s) on connection`);
+    startRefreshLoop();
+
+    // 4) Report the application-level status, shown in the Configuration
     // screen. Zero printer is not an error (the user may not have configured
     // anything yet): stay connected and let the docs guide them.
     await gladys.setConnectionStatus(
@@ -121,11 +194,18 @@ gladys.on('connected', async () => {
   }
 });
 
+gladys.on('disconnected', () => {
+  // Publishing states while disconnected is pointless: the loop is re-armed
+  // by the 'connected' handler after every reconnection.
+  stopRefreshLoop();
+});
+
 // --- Graceful shutdown -------------------------------------------------------
 // The SDK disconnects cleanly and exits with code 0 when the supervisor stops
 // the container (SIGTERM/SIGINT).
 gladys.handleShutdown((signal) => {
   logger.info(`Received ${signal} -> graceful shutdown`);
+  stopRefreshLoop();
 });
 
 // --- Startup -----------------------------------------------------------------

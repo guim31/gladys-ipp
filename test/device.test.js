@@ -9,6 +9,7 @@ import {
   buildPrinterDevice,
   buildPrinterStates,
   DEVICE_POLL_FREQUENCY_MS,
+  isPrinterDevice,
   platformIdFor,
   pollPrinter,
   PRINTER_URL_PARAM,
@@ -47,8 +48,10 @@ test('buildPrinterDevice exposes one level sensor per marker plus the state', ()
 
   assert.equal(device.name, 'HP OfficeJet Pro 9010');
   assert.equal(device.external_id, 'printer:12345678-90ab-cdef-1234-567890abcdef');
-  // Gladys only accepts values from its DEVICE_POLL_FREQUENCIES list (in ms).
+  // Gladys only accepts values from its DEVICE_POLL_FREQUENCIES list (in ms),
+  // and only schedules a poll when should_poll is true (column default: false).
   assert.equal(device.poll_frequency, DEVICE_POLL_FREQUENCY_MS);
+  assert.equal(device.should_poll, true);
   assert.deepEqual(device.params, [{ name: PRINTER_URL_PARAM, value: URL_UNDER_TEST }]);
 
   assert.equal(device.features.length, 5); // state + 4 cartridges
@@ -142,6 +145,34 @@ test('pollPrinter throttles the IPP queries to the configured interval', async (
   clock += config.poll_frequency * 1000;
   await pollPrinter(gladys, device, config, deps); // interval over: queries
   assert.equal(fetches, 2);
+});
+
+test('pollPrinter force bypasses the throttle (own refresh loop)', async () => {
+  resetPollThrottle();
+  const gladys = createFakeGladys();
+  const device = buildPrinterDevice(gladys, probedInkjet(), config);
+
+  let fetches = 0;
+  const deps = {
+    fetchAttributes: async () => {
+      fetches += 1;
+      return COLOR_INKJET_ATTRIBUTES;
+    },
+    now: () => 1_000_000, // frozen clock: the throttle would always refuse
+    force: true,
+  };
+
+  await pollPrinter(gladys, device, config, deps);
+  await pollPrinter(gladys, device, config, deps);
+  assert.equal(fetches, 2);
+});
+
+test('isPrinterDevice recognizes our devices by their PRINTER_URL param', () => {
+  const gladys = createFakeGladys();
+  assert.equal(isPrinterDevice(buildPrinterDevice(gladys, probedInkjet(), config)), true);
+  assert.equal(isPrinterDevice({ external_id: 'other', params: [] }), false);
+  assert.equal(isPrinterDevice({ external_id: 'other' }), false);
+  assert.equal(isPrinterDevice(undefined), false);
 });
 
 test('pollPrinter re-publishes the device when a new supply appears', async () => {
