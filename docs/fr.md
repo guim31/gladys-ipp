@@ -14,7 +14,15 @@ Un appareil Gladys par imprimante, avec :
   scènes (« encre noire sous 10 % → notification ») ;
 - **l'état de l'imprimante** : `idle` (prête), `printing` (impression en
   cours), `stopped` (arrêtée), avec la raison quand l'imprimante la fournit
-  (`stopped (media-empty)` = plus de papier).
+  (`stopped (media-empty)` = plus de papier). L'état est rafraîchi **chaque
+  minute**, indépendamment de l'intervalle réglé pour les niveaux : une
+  impression ne dure que quelques secondes.
+
+> Si votre imprimante affiche en permanence `idle`, c'est le plus souvent
+> normal : c'est l'état d'une imprimante allumée qui n'a rien à faire. Il ne
+> change que pendant une impression ou en cas de problème (plus de papier,
+> bourrage). Le bouton « Tester une imprimante » vous montre en direct ce que
+> la vôtre annonce à un instant donné.
 
 ## Compatibilité
 
@@ -35,7 +43,8 @@ cas l'appareil n'expose que son état.
    (`192.168.1.20`), un nom d'hôte (`imprimante.local`) ou une URI complète
    (`ipp://192.168.1.20/ipp/print`), séparés par des virgules.
 3. Ajustez au besoin l'**intervalle de rafraîchissement** (900 s par défaut —
-   les niveaux d'encre évoluent lentement).
+   les niveaux d'encre évoluent lentement). Il ne concerne que les niveaux :
+   l'état est toujours relevé chaque minute.
 4. Ajoutez les appareils découverts depuis l'onglet **Découverte**.
 
 > Conseil : attribuez une IP fixe (réservation DHCP) aux imprimantes dont

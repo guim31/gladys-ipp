@@ -161,29 +161,41 @@ test('pollPrinter reads the URL from the device params and publishes states', as
   assert.equal(gladys.discoveredDevices.length, 0); // features unchanged: no re-publish
 });
 
-test('pollPrinter throttles the IPP queries to the configured interval', async () => {
+test('pollPrinter refreshes the state on every poll, levels on their interval', async () => {
   resetPollThrottle();
   const gladys = createFakeGladys();
   const device = buildPrinterDevice(gladys, probedInkjet(), config);
+  const stateId = 'printer:12345678-90ab-cdef-1234-567890abcdef:state';
 
   let clock = 1_000_000;
-  let fetches = 0;
   const deps = {
-    fetchAttributes: async () => {
-      fetches += 1;
-      return COLOR_INKJET_ATTRIBUTES;
-    },
+    fetchAttributes: async () => COLOR_INKJET_ATTRIBUTES,
     now: () => clock,
   };
 
-  await pollPrinter(gladys, device, config, deps); // first poll: queries
-  clock += 60_000;
-  await pollPrinter(gladys, device, config, deps); // 1 min later: throttled
-  assert.equal(fetches, 1);
+  await pollPrinter(gladys, device, config, deps); // first poll: state + levels
+  assert.equal(gladys.published.length, 5);
 
+  gladys.published.length = 0;
+  clock += 60_000;
+  await pollPrinter(gladys, device, config, deps); // 1 min later: state only
+  assert.deepEqual(
+    gladys.published.map((p) => p.featureExternalId),
+    [stateId],
+    'a print job lasts seconds: the state must not wait for the levels interval',
+  );
+
+  gladys.published.length = 0;
   clock += config.poll_frequency * 1000;
-  await pollPrinter(gladys, device, config, deps); // interval over: queries
-  assert.equal(fetches, 2);
+  await pollPrinter(gladys, device, config, deps); // interval over: levels again
+  assert.equal(gladys.published.length, 5);
+});
+
+test('buildPrinterStates can omit the levels', () => {
+  const gladys = createFakeGladys();
+  const states = buildPrinterStates(gladys, probedInkjet(), { withLevels: false });
+  assert.equal(states.length, 1);
+  assert.equal(states[0].text, 'idle');
 });
 
 test('pollPrinter force bypasses the throttle (own refresh loop)', async () => {

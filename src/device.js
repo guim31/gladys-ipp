@@ -24,17 +24,22 @@ export const PRINTER_URL_PARAM = 'PRINTER_URL';
 export const STATE_FEATURE_KEY = 'state';
 
 // Gladys only accepts poll_frequency values from its own list (in ms):
-// [60000, 30000, 15000, 10000, 2000, 1000]. One minute is the slowest, so the
-// device is declared at 60000 and pollPrinter throttles the ACTUAL IPP
-// requests down to the user's configured interval (config.poll_frequency, s).
+// [60000, 30000, 15000, 10000, 2000, 1000]. One minute is the slowest, and it
+// is what we want: the printer is queried every minute so the STATE stays
+// current, while the supply LEVELS are only published every
+// config.poll_frequency seconds (see pollPrinter).
 export const DEVICE_POLL_FREQUENCY_MS = 60_000;
 
-// Timestamp of the last successful IPP query, per device external_id.
-const lastPollAt = new Map();
+// Timestamp of the last LEVELS publish, per device external_id. Only the
+// levels are throttled: they keep history, so publishing them every minute
+// would bloat it for values that move over weeks. The state is volatile
+// ('printing' lasts seconds) and keeps no history: it is published on every
+// poll, otherwise a print job is simply never observed.
+const lastLevelsAt = new Map();
 
-/** Reset the poll throttle (tests only). */
+/** Reset the levels throttle (tests only). */
 export function resetPollThrottle() {
-  lastPollAt.clear();
+  lastLevelsAt.clear();
 }
 
 const logger = createLogger({ name: 'printer-device' });
@@ -123,12 +128,19 @@ export function buildPrinterDevice(gladys, { printer, url }, _config) {
  * Build the states batch for one probed printer (same ids as buildPrinterDevice).
  * @param {object} gladys SDK instance
  * @param {{ printer: object, url: string }} probed
+ * @param {{ withLevels?: boolean }} [options] omit the supply levels (state-only refresh)
  * @returns {Array<{ device_feature_external_id: string, state?: number, text?: string }>}
  */
-export function buildPrinterStates(gladys, { printer, url }) {
+export function buildPrinterStates(gladys, { printer, url }, { withLevels = true } = {}) {
   const ids = gladys.externalIds(DEVICE_TYPE, platformIdFor(printer, url));
-  return [
+  const states = [
     { device_feature_external_id: ids.feature(STATE_FEATURE_KEY), text: printer.stateText },
+  ];
+  if (!withLevels) {
+    return states;
+  }
+  return [
+    ...states,
     ...printer.markers
       .filter((marker) => marker.percent !== null)
       .map((marker) => ({
@@ -156,9 +168,11 @@ export function isPrinterDevice(device) {
  * is re-published first so the new features exist before their states arrive.
  *
  * Gladys calls this every minute (DEVICE_POLL_FREQUENCY_MS, the slowest value
- * it supports); the ACTUAL IPP query is throttled to config.poll_frequency
- * seconds — ink levels do not need a per-minute refresh. `force` bypasses the
- * throttle, for the integration's own refresh loop and for a fresh device.
+ * it supports). The STATE is refreshed on EVERY call: 'printing' lasts a few
+ * seconds, so sampling it at the (much slower) levels interval reports a
+ * permanent 'idle'. The LEVELS are published at config.poll_frequency only —
+ * they keep history and move over weeks. `force` publishes both, for the
+ * integration's own refresh loop and for a freshly created device.
  * @param {object} gladys SDK instance
  * @param {object} device the Gladys device (with params) handed to onPoll
  * @param {{ poll_frequency: number }} config
@@ -171,32 +185,33 @@ export async function pollPrinter(gladys, device, config, deps = {}) {
     throw new Error(`Device ${device.external_id} has no ${PRINTER_URL_PARAM} param`);
   }
 
-  const last = lastPollAt.get(device.external_id);
-  const intervalMs = Math.max(config.poll_frequency, 60) * 1000;
-  if (!force && last !== undefined && now() - last < intervalMs) {
-    logger.debug(
-      `Poll ${device.external_id} skipped (interval ${config.poll_frequency}s not over)`,
-    );
-    return;
-  }
-
   const attributes = await fetchAttributes(url);
-  lastPollAt.set(device.external_id, now());
   const printer = parsePrinter(attributes);
   const probed = { printer, url };
 
-  const rebuilt = buildPrinterDevice(gladys, probed, config);
-  const knownFeatureIds = new Set((device.features ?? []).map((f) => f.external_id));
-  const hasNewFeature = rebuilt.features.some((f) => !knownFeatureIds.has(f.external_id));
-  if (hasNewFeature && knownFeatureIds.size > 0) {
-    logger.info(`Supplies changed on ${device.external_id} -> re-publishing the device`);
-    await gladys.publishDiscoveredDevices([rebuilt]);
+  const lastLevels = lastLevelsAt.get(device.external_id);
+  const levelsIntervalMs = Math.max(config.poll_frequency, 60) * 1000;
+  const withLevels = force || lastLevels === undefined || now() - lastLevels >= levelsIntervalMs;
+
+  if (withLevels) {
+    const rebuilt = buildPrinterDevice(gladys, probed, config);
+    const knownFeatureIds = new Set((device.features ?? []).map((f) => f.external_id));
+    const hasNewFeature = rebuilt.features.some((f) => !knownFeatureIds.has(f.external_id));
+    if (hasNewFeature && knownFeatureIds.size > 0) {
+      logger.info(`Supplies changed on ${device.external_id} -> re-publishing the device`);
+      await gladys.publishDiscoveredDevices([rebuilt]);
+    }
   }
 
-  const states = buildPrinterStates(gladys, probed);
-  logger.info(
-    `Poll ${device.external_id}: ${printer.stateText}, ` +
-      `${printer.markers.map((m) => `${m.name}=${m.percent ?? '?'}%`).join(', ') || 'no marker'}`,
-  );
+  const states = buildPrinterStates(gladys, probed, { withLevels });
+  if (withLevels) {
+    lastLevelsAt.set(device.external_id, now());
+    logger.info(
+      `Poll ${device.external_id}: ${printer.stateText}, ` +
+        `${printer.markers.map((m) => `${m.name}=${m.percent ?? '?'}%`).join(', ') || 'no marker'}`,
+    );
+  } else {
+    logger.debug(`Poll ${device.external_id}: state "${printer.stateText}" (levels not due)`);
+  }
   await gladys.publishStates(states);
 }
