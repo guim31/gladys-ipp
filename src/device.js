@@ -78,6 +78,11 @@ export function buildPrinterDevice(gladys, { printer, url }, _config) {
       external_id: ids.feature(STATE_FEATURE_KEY),
       category: DEVICE_FEATURE_CATEGORIES.TEXT,
       type: DEVICE_FEATURE_TYPES.TEXT.TEXT,
+      // min/max are NOT NULL in the Gladys schema, with no default: EVERY
+      // feature must carry them, even a text one where they mean nothing.
+      // Omitting them fails device creation with a 422.
+      min: 0,
+      max: 1,
       read_only: true,
       has_feedback: false,
       keep_history: false,

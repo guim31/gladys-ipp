@@ -88,6 +88,19 @@ const CATEGORY_TYPES_WITH_ICON = {
   ],
 };
 
+test('every published feature carries the fields Gladys requires', () => {
+  const gladys = createFakeGladys();
+  const device = buildPrinterDevice(gladys, probedInkjet(), config);
+  for (const feature of device.features) {
+    // min/max are NOT NULL in the schema with no default: a feature without
+    // them makes device creation fail with a 422, whatever its category.
+    assert.equal(typeof feature.min, 'number', `feature "${feature.name}" needs a numeric min`);
+    assert.equal(typeof feature.max, 'number', `feature "${feature.name}" needs a numeric max`);
+    assert.equal(typeof feature.name, 'string');
+    assert.ok(feature.external_id, 'each feature needs an external_id');
+  }
+});
+
 test('every published feature uses a category/type pair that has an icon', () => {
   const gladys = createFakeGladys();
   const device = buildPrinterDevice(gladys, probedInkjet(), config);
