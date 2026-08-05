@@ -31,11 +31,26 @@ const gladys = new GladysIntegration();
 // Current configuration (hot-reloaded via onConfigUpdated).
 let config = normalizeConfig();
 
-// Own refresh loop over the devices the user created. Gladys also polls them
-// (should_poll + poll_frequency), but its scheduler only covers devices
-// created WITH those fields: this loop keeps every printer refreshed at the
-// configured interval, whatever the device record says.
+// Own sampling loop over the devices the user created. Gladys also polls
+// them (should_poll + poll_frequency), but re-publishing never updates the
+// poll_frequency of an already-created device: this loop is the one cadence
+// the integration fully controls, for every printer, old or new.
+//
+// It runs every STATE_SAMPLING_MS: a print job lasts seconds, so the state
+// must be sampled often to be observed at all. pollPrinter only PUBLISHES
+// on change (state) or on the configured interval (levels), so the frequent
+// sampling costs one local IPP request and nothing else.
+const STATE_SAMPLING_MS = 15_000;
 let refreshTimer = null;
+
+// Created printer devices, cached so the sampling loop does not hit
+// GET /device every 15 s. Kept in sync by the device lifecycle events.
+let printerDevices = [];
+
+async function reloadPrinterDevices() {
+  printerDevices = (await gladys.getDevices()).filter(isPrinterDevice);
+  logger.debug(`Device cache: ${printerDevices.length} printer(s)`);
+}
 
 /**
  * Discover the printers (manual list + mDNS), publish them as devices and
@@ -71,21 +86,21 @@ async function discoverAndPublish() {
 }
 
 /**
- * Query every printer the user actually created and publish its states.
- * @returns {Promise<number>} number of printers refreshed
+ * Sample every cached printer once. pollPrinter decides what (if anything)
+ * gets published: state on change, levels on their interval, everything
+ * when `force` is set (reconnection).
+ * @param {{ force?: boolean }} [options]
+ * @returns {Promise<number>} number of printers sampled without error
  */
-async function refreshCreatedPrinters() {
-  const devices = (await gladys.getDevices()).filter(isPrinterDevice);
-  if (devices.length === 0) {
+async function refreshCreatedPrinters({ force = false } = {}) {
+  if (printerDevices.length === 0) {
     logger.debug('Refresh: no printer device created yet');
     return 0;
   }
   let refreshed = 0;
-  for (const device of devices) {
+  for (const device of printerDevices) {
     try {
-      // force: this loop IS the schedule, it must not be throttled by the
-      // interval check that protects the (more frequent) Gladys polls.
-      await pollPrinter(gladys, device, config, { force: true });
+      await pollPrinter(gladys, device, config, { force });
       refreshed += 1;
     } catch (err) {
       logger.error(`Refresh failed for ${device.external_id}: ${err.message}`);
@@ -103,11 +118,13 @@ function stopRefreshLoop() {
 
 function startRefreshLoop() {
   stopRefreshLoop();
-  const intervalMs = Math.max(config.poll_frequency, 60) * 1000;
-  logger.info(`Refresh loop every ${intervalMs / 1000}s`);
+  logger.info(
+    `Sampling loop every ${STATE_SAMPLING_MS / 1000}s ` +
+      `(state published on change, levels every ${config.poll_frequency}s)`,
+  );
   refreshTimer = setInterval(() => {
-    refreshCreatedPrinters().catch((err) => logger.error('Refresh loop failed', err));
-  }, intervalMs);
+    refreshCreatedPrinters().catch((err) => logger.error('Sampling loop failed', err));
+  }, STATE_SAMPLING_MS);
   // Never hold the process alive just for this timer.
   refreshTimer.unref?.();
 }
@@ -127,6 +144,15 @@ gladys.onDeviceCreated(async (device) => {
   }
   logger.info(`onDeviceCreated -> first refresh of ${device.external_id}`);
   await pollPrinter(gladys, device, config, { force: true });
+  await reloadPrinterDevices();
+});
+
+// Keep the sampling-loop cache honest when devices change outside our flow.
+gladys.onDeviceUpdated(async () => {
+  await reloadPrinterDevices();
+});
+gladys.onDeviceDeleted(async () => {
+  await reloadPrinterDevices();
 });
 
 // --- Polling: Gladys asks to refresh a device --------------------------------
@@ -148,9 +174,9 @@ gladys.onConfigUpdated(async (newConfig) => {
   // Re-discover: the manual list or the poll frequency may have changed.
   // publishDiscoveredDevices is idempotent (upsert by external_id).
   await discoverAndPublish();
-  // The interval may have changed: re-arm the loop on the new value.
+  await reloadPrinterDevices();
   startRefreshLoop();
-  await refreshCreatedPrinters();
+  await refreshCreatedPrinters({ force: true });
 });
 
 // --- Connection lifecycle ----------------------------------------------------
@@ -165,9 +191,10 @@ gladys.on('connected', async () => {
     // 2) Discover and publish the printers as soon as we are connected.
     const count = await discoverAndPublish();
 
-    // 3) Refresh the printers the user already created, then keep them fresh
-    // on the configured interval — independently of the Gladys scheduler.
-    const refreshed = await refreshCreatedPrinters();
+    // 3) Refresh the printers the user already created (everything, now),
+    // then keep sampling them — independently of the Gladys scheduler.
+    await reloadPrinterDevices();
+    const refreshed = await refreshCreatedPrinters({ force: true });
     logger.info(`Refreshed ${refreshed} created printer(s) on connection`);
     startRefreshLoop();
 

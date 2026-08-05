@@ -6,8 +6,8 @@
     "en": "Ink/toner levels and state of your network printers over IPP (AirPrint). Local, no cloud.",
     "fr": "Niveaux d'encre/toner et état de vos imprimantes réseau via IPP (AirPrint). Local, sans cloud."
   },
-  "version": "1.0.1",
-  "docker_image": "ghcr.io/guim31/gladys-ipp:1.0.1",
+  "version": "1.0.2",
+  "docker_image": "ghcr.io/guim31/gladys-ipp:1.0.2",
   "gladys_version": ">=4.62.0",
   "cover_image": "https://raw.githubusercontent.com/guim31/gladys-ipp/main/cover.png",
   "transports": ["local"],
@@ -60,8 +60,8 @@
         "fr": "Rafraîchissement des niveaux (s)"
       },
       "description": {
-        "en": "How often the ink/toner levels are recorded, in seconds. They move slowly: 900 s (15 min) is plenty. The printer state is always refreshed every minute.",
-        "fr": "Fréquence d'enregistrement des niveaux d'encre/toner, en secondes. Ils évoluent lentement : 900 s (15 min) suffisent largement. L'état de l'imprimante est toujours rafraîchi chaque minute."
+        "en": "How often the ink/toner levels are recorded, in seconds. They move slowly: 900 s (15 min) is plenty. The printer state is watched continuously (sampled every 15 s) and updated as soon as it changes.",
+        "fr": "Fréquence d'enregistrement des niveaux d'encre/toner, en secondes. Ils évoluent lentement : 900 s (15 min) suffisent largement. L'état de l'imprimante est surveillé en continu (échantillonné toutes les 15 s) et mis à jour dès qu'il change."
       },
       "required": false,
       "default": 900,

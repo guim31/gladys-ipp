@@ -161,15 +161,16 @@ test('pollPrinter reads the URL from the device params and publishes states', as
   assert.equal(gladys.discoveredDevices.length, 0); // features unchanged: no re-publish
 });
 
-test('pollPrinter refreshes the state on every poll, levels on their interval', async () => {
+test('pollPrinter publishes the state on change, the levels on their interval', async () => {
   resetPollThrottle();
   const gladys = createFakeGladys();
   const device = buildPrinterDevice(gladys, probedInkjet(), config);
   const stateId = 'printer:12345678-90ab-cdef-1234-567890abcdef:state';
 
   let clock = 1_000_000;
+  let attributes = COLOR_INKJET_ATTRIBUTES;
   const deps = {
-    fetchAttributes: async () => COLOR_INKJET_ATTRIBUTES,
+    fetchAttributes: async () => attributes,
     now: () => clock,
   };
 
@@ -177,15 +178,22 @@ test('pollPrinter refreshes the state on every poll, levels on their interval', 
   assert.equal(gladys.published.length, 5);
 
   gladys.published.length = 0;
-  clock += 60_000;
-  await pollPrinter(gladys, device, config, deps); // 1 min later: state only
+  clock += 15_000;
+  await pollPrinter(gladys, device, config, deps); // same state, levels not due
+  assert.equal(gladys.published.length, 0, 'an identical idle must not be re-published');
+
+  clock += 15_000;
+  attributes = { ...COLOR_INKJET_ATTRIBUTES, 'printer-state': 4 }; // printing starts
+  await pollPrinter(gladys, device, config, deps);
   assert.deepEqual(
     gladys.published.map((p) => p.featureExternalId),
     [stateId],
-    'a print job lasts seconds: the state must not wait for the levels interval',
+    'a state change must be published immediately, without the levels',
   );
+  assert.equal(gladys.published[0].state, 'printing');
 
   gladys.published.length = 0;
+  attributes = COLOR_INKJET_ATTRIBUTES; // back to idle
   clock += config.poll_frequency * 1000;
   await pollPrinter(gladys, device, config, deps); // interval over: levels again
   assert.equal(gladys.published.length, 5);

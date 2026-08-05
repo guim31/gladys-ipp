@@ -13,8 +13,9 @@ One Gladys device per printer, with:
   10% → notification");
 - **the printer state**: `idle` (ready), `printing`, `stopped`, with the
   reason when the printer reports it (`stopped (media-empty)` = out of
-  paper). The state is refreshed **every minute**, independently of the
-  interval set for the levels: a print job only lasts a few seconds.
+  paper). The state is watched **continuously** (sampled every 15 s) and updated as
+  soon as it changes, independently of the interval set for the levels: a
+  print job only lasts a few seconds.
 
 > A printer permanently showing `idle` is usually normal: that is the state
 > of a powered-on printer with nothing to do. It only changes while printing
@@ -40,8 +41,8 @@ device only exposes its state.
    (`printer.local`) or a full URI (`ipp://192.168.1.20/ipp/print`),
    separated by commas.
 3. Adjust the **refresh interval** if needed (900 s by default — ink levels
-   move slowly). It only applies to the levels: the state is always read
-   every minute.
+   move slowly). It only applies to the levels: the state is watched
+   continuously (every 15 s).
 4. Add the discovered devices from the **Discovery** tab.
 
 > Tip: give a fixed IP (DHCP reservation) to printers that do not advertise

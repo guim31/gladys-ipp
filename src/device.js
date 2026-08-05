@@ -31,15 +31,20 @@ export const STATE_FEATURE_KEY = 'state';
 export const DEVICE_POLL_FREQUENCY_MS = 60_000;
 
 // Timestamp of the last LEVELS publish, per device external_id. Only the
-// levels are throttled: they keep history, so publishing them every minute
+// levels are throttled: they keep history, so publishing them on every sample
 // would bloat it for values that move over weeks. The state is volatile
-// ('printing' lasts seconds) and keeps no history: it is published on every
-// poll, otherwise a print job is simply never observed.
+// ('printing' lasts seconds) and keeps no history: it is sampled often and
+// published as soon as it CHANGES (see lastStateText below).
 const lastLevelsAt = new Map();
 
-/** Reset the levels throttle (tests only). */
+// Last state text published, per device external_id: publish-on-change, so
+// the frequent state sampling does not spam Gladys with identical 'idle'.
+const lastStateText = new Map();
+
+/** Reset the poll bookkeeping (tests only). */
 export function resetPollThrottle() {
   lastLevelsAt.clear();
+  lastStateText.clear();
 }
 
 const logger = createLogger({ name: 'printer-device' });
@@ -167,12 +172,15 @@ export function isPrinterDevice(device) {
  * When the supplies changed (cartridge swap, renamed supply...), the device
  * is re-published first so the new features exist before their states arrive.
  *
- * Gladys calls this every minute (DEVICE_POLL_FREQUENCY_MS, the slowest value
- * it supports). The STATE is refreshed on EVERY call: 'printing' lasts a few
- * seconds, so sampling it at the (much slower) levels interval reports a
- * permanent 'idle'. The LEVELS are published at config.poll_frequency only —
- * they keep history and move over weeks. `force` publishes both, for the
- * integration's own refresh loop and for a freshly created device.
+ * Called both by the Gladys scheduler and by the integration's own sampling
+ * loop (every STATE_SAMPLING_MS, see index.js): a print job lasts seconds,
+ * so the state must be sampled far more often than it is worth storing.
+ * Publication is decoupled from sampling:
+ *   - the STATE is published when it CHANGES (it keeps no history, and
+ *     re-publishing an identical 'idle' every 15 s is pure noise);
+ *   - the LEVELS are published at config.poll_frequency — they keep history
+ *     and move over weeks.
+ * `force` publishes everything now (fresh device, reconnection).
  * @param {object} gladys SDK instance
  * @param {object} device the Gladys device (with params) handed to onPoll
  * @param {{ poll_frequency: number }} config
@@ -192,6 +200,14 @@ export async function pollPrinter(gladys, device, config, deps = {}) {
   const lastLevels = lastLevelsAt.get(device.external_id);
   const levelsIntervalMs = Math.max(config.poll_frequency, 60) * 1000;
   const withLevels = force || lastLevels === undefined || now() - lastLevels >= levelsIntervalMs;
+  const stateChanged = lastStateText.get(device.external_id) !== printer.stateText;
+
+  if (!withLevels && !stateChanged) {
+    logger.debug(
+      `Poll ${device.external_id}: "${printer.stateText}" unchanged, nothing to publish`,
+    );
+    return;
+  }
 
   if (withLevels) {
     const rebuilt = buildPrinterDevice(gladys, probed, config);
@@ -211,7 +227,8 @@ export async function pollPrinter(gladys, device, config, deps = {}) {
         `${printer.markers.map((m) => `${m.name}=${m.percent ?? '?'}%`).join(', ') || 'no marker'}`,
     );
   } else {
-    logger.debug(`Poll ${device.external_id}: state "${printer.stateText}" (levels not due)`);
+    logger.info(`Poll ${device.external_id}: state -> "${printer.stateText}"`);
   }
   await gladys.publishStates(states);
+  lastStateText.set(device.external_id, printer.stateText);
 }
