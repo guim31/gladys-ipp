@@ -78,10 +78,6 @@ export function buildPrinterDevice(gladys, { printer, url }, _config) {
       external_id: ids.feature(STATE_FEATURE_KEY),
       category: DEVICE_FEATURE_CATEGORIES.TEXT,
       type: DEVICE_FEATURE_TYPES.TEXT.TEXT,
-      // Text features carry no numeric range, but min/max are part of the
-      // standard Gladys feature shape: declare a neutral range.
-      min: 0,
-      max: 1,
       read_only: true,
       has_feedback: false,
       keep_history: false,
@@ -92,7 +88,11 @@ export function buildPrinterDevice(gladys, { printer, url }, _config) {
         name: marker.name,
         external_id: ids.feature(`marker:${marker.key}`),
         category: DEVICE_FEATURE_CATEGORIES.LEVEL_SENSOR,
-        type: DEVICE_FEATURE_TYPES.SENSOR.INTEGER,
+        // A supply level IS a level expressed as a percentage. This type also
+        // drives the UI icon: Gladys maps level-sensor icons per TYPE, and
+        // the generic sensor/integer type has no entry, so it rendered with
+        // no icon at all. liquid-level-percent shows the droplet.
+        type: DEVICE_FEATURE_TYPES.LEVEL_SENSOR.LIQUID_LEVEL_PERCENT,
         unit: DEVICE_FEATURE_UNITS.PERCENT,
         min: 0,
         max: 100,

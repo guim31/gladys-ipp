@@ -62,7 +62,7 @@ test('buildPrinterDevice exposes one level sensor per marker plus the state', ()
 
   for (const marker of markers) {
     assert.equal(marker.category, DEVICE_FEATURE_CATEGORIES.LEVEL_SENSOR);
-    assert.equal(marker.type, DEVICE_FEATURE_TYPES.SENSOR.INTEGER);
+    assert.equal(marker.type, DEVICE_FEATURE_TYPES.LEVEL_SENSOR.LIQUID_LEVEL_PERCENT);
     assert.equal(marker.unit, DEVICE_FEATURE_UNITS.PERCENT);
     assert.equal(marker.min, 0);
     assert.equal(marker.max, 100);
@@ -73,6 +73,32 @@ test('buildPrinterDevice exposes one level sensor per marker plus the state', ()
     markers[0].external_id,
     'printer:12345678-90ab-cdef-1234-567890abcdef:marker:black-cartridge',
   );
+});
+
+// The Gladys UI resolves a feature icon as DeviceFeatureCategoriesIcon
+// [category][type]: a (category, type) pair missing from that table renders
+// with NO icon at all. Only these pairs are mapped for the categories we use.
+const CATEGORY_TYPES_WITH_ICON = {
+  [DEVICE_FEATURE_CATEGORIES.TEXT]: [DEVICE_FEATURE_TYPES.TEXT.TEXT],
+  [DEVICE_FEATURE_CATEGORIES.LEVEL_SENSOR]: [
+    DEVICE_FEATURE_TYPES.SENSOR.DECIMAL,
+    DEVICE_FEATURE_TYPES.LEVEL_SENSOR.LIQUID_STATE,
+    DEVICE_FEATURE_TYPES.LEVEL_SENSOR.LIQUID_LEVEL_PERCENT,
+    DEVICE_FEATURE_TYPES.LEVEL_SENSOR.LIQUID_DEPTH,
+  ],
+};
+
+test('every published feature uses a category/type pair that has an icon', () => {
+  const gladys = createFakeGladys();
+  const device = buildPrinterDevice(gladys, probedInkjet(), config);
+  for (const feature of device.features) {
+    const mapped = CATEGORY_TYPES_WITH_ICON[feature.category];
+    assert.ok(mapped, `category "${feature.category}" is not covered by this test`);
+    assert.ok(
+      mapped.includes(feature.type),
+      `feature "${feature.name}" (${feature.category}/${feature.type}) would render without an icon`,
+    );
+  }
 });
 
 test('buildPrinterDevice skips markers with an unknown level', () => {
