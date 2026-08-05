@@ -23,6 +23,20 @@ export const DEVICE_TYPE = 'printer';
 export const PRINTER_URL_PARAM = 'PRINTER_URL';
 export const STATE_FEATURE_KEY = 'state';
 
+// Gladys only accepts poll_frequency values from its own list (in ms):
+// [60000, 30000, 15000, 10000, 2000, 1000]. One minute is the slowest, so the
+// device is declared at 60000 and pollPrinter throttles the ACTUAL IPP
+// requests down to the user's configured interval (config.poll_frequency, s).
+export const DEVICE_POLL_FREQUENCY_MS = 60_000;
+
+// Timestamp of the last successful IPP query, per device external_id.
+const lastPollAt = new Map();
+
+/** Reset the poll throttle (tests only). */
+export function resetPollThrottle() {
+  lastPollAt.clear();
+}
+
 const logger = createLogger({ name: 'printer-device' });
 
 /**
@@ -54,9 +68,9 @@ function deviceName(printer, url) {
  * Build the Gladys discovery payload for one probed printer.
  * @param {object} gladys SDK instance
  * @param {{ printer: object, url: string }} probed
- * @param {{ poll_frequency: number }} config
+ * @param {object} _config reserved (device shape no longer depends on it)
  */
-export function buildPrinterDevice(gladys, { printer, url }, config) {
+export function buildPrinterDevice(gladys, { printer, url }, _config) {
   const ids = gladys.externalIds(DEVICE_TYPE, platformIdFor(printer, url));
   const features = [
     {
@@ -91,7 +105,7 @@ export function buildPrinterDevice(gladys, { printer, url }, config) {
   return {
     name: deviceName(printer, url),
     external_id: ids.device,
-    poll_frequency: config.poll_frequency,
+    poll_frequency: DEVICE_POLL_FREQUENCY_MS,
     params: [{ name: PRINTER_URL_PARAM, value: url }],
     features,
   };
@@ -120,19 +134,33 @@ export function buildPrinterStates(gladys, { printer, url }) {
  * Poll one printer device: query it over IPP and publish the fresh states.
  * When the supplies changed (cartridge swap, renamed supply...), the device
  * is re-published first so the new features exist before their states arrive.
+ *
+ * Gladys calls this every minute (DEVICE_POLL_FREQUENCY_MS, the slowest value
+ * it supports); the ACTUAL IPP query is throttled to config.poll_frequency
+ * seconds — ink levels do not need a per-minute refresh.
  * @param {object} gladys SDK instance
  * @param {object} device the Gladys device (with params) handed to onPoll
  * @param {{ poll_frequency: number }} config
- * @param {{ fetchAttributes?: typeof getPrinterAttributes }} [deps] test seam
+ * @param {{ fetchAttributes?: typeof getPrinterAttributes, now?: () => number }} [deps] test seam
  */
 export async function pollPrinter(gladys, device, config, deps = {}) {
-  const { fetchAttributes = getPrinterAttributes } = deps;
+  const { fetchAttributes = getPrinterAttributes, now = Date.now } = deps;
   const url = (device.params ?? []).find((param) => param.name === PRINTER_URL_PARAM)?.value;
   if (!url) {
     throw new Error(`Device ${device.external_id} has no ${PRINTER_URL_PARAM} param`);
   }
 
+  const last = lastPollAt.get(device.external_id);
+  const intervalMs = Math.max(config.poll_frequency, 60) * 1000;
+  if (last !== undefined && now() - last < intervalMs) {
+    logger.debug(
+      `Poll ${device.external_id} skipped (interval ${config.poll_frequency}s not over)`,
+    );
+    return;
+  }
+
   const attributes = await fetchAttributes(url);
+  lastPollAt.set(device.external_id, now());
   const printer = parsePrinter(attributes);
   const probed = { printer, url };
 

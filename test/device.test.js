@@ -8,9 +8,11 @@ import {
 import {
   buildPrinterDevice,
   buildPrinterStates,
+  DEVICE_POLL_FREQUENCY_MS,
   platformIdFor,
   pollPrinter,
   PRINTER_URL_PARAM,
+  resetPollThrottle,
 } from '../src/device.js';
 import { discoverPrinters, mdnsCandidateUrl } from '../src/discovery.js';
 import { parsePrinter } from '../src/printer.js';
@@ -45,7 +47,8 @@ test('buildPrinterDevice exposes one level sensor per marker plus the state', ()
 
   assert.equal(device.name, 'HP OfficeJet Pro 9010');
   assert.equal(device.external_id, 'printer:12345678-90ab-cdef-1234-567890abcdef');
-  assert.equal(device.poll_frequency, config.poll_frequency);
+  // Gladys only accepts values from its DEVICE_POLL_FREQUENCIES list (in ms).
+  assert.equal(device.poll_frequency, DEVICE_POLL_FREQUENCY_MS);
   assert.deepEqual(device.params, [{ name: PRINTER_URL_PARAM, value: URL_UNDER_TEST }]);
 
   assert.equal(device.features.length, 5); // state + 4 cartridges
@@ -99,6 +102,7 @@ test('buildPrinterStates publishes the state text and every marker percent', () 
 // --- polling -----------------------------------------------------------------
 
 test('pollPrinter reads the URL from the device params and publishes states', async () => {
+  resetPollThrottle();
   const gladys = createFakeGladys();
   const device = buildPrinterDevice(gladys, probedInkjet(), config);
 
@@ -115,7 +119,33 @@ test('pollPrinter reads the URL from the device params and publishes states', as
   assert.equal(gladys.discoveredDevices.length, 0); // features unchanged: no re-publish
 });
 
+test('pollPrinter throttles the IPP queries to the configured interval', async () => {
+  resetPollThrottle();
+  const gladys = createFakeGladys();
+  const device = buildPrinterDevice(gladys, probedInkjet(), config);
+
+  let clock = 1_000_000;
+  let fetches = 0;
+  const deps = {
+    fetchAttributes: async () => {
+      fetches += 1;
+      return COLOR_INKJET_ATTRIBUTES;
+    },
+    now: () => clock,
+  };
+
+  await pollPrinter(gladys, device, config, deps); // first poll: queries
+  clock += 60_000;
+  await pollPrinter(gladys, device, config, deps); // 1 min later: throttled
+  assert.equal(fetches, 1);
+
+  clock += config.poll_frequency * 1000;
+  await pollPrinter(gladys, device, config, deps); // interval over: queries
+  assert.equal(fetches, 2);
+});
+
 test('pollPrinter re-publishes the device when a new supply appears', async () => {
+  resetPollThrottle();
   const gladys = createFakeGladys();
   const device = buildPrinterDevice(gladys, probedInkjet(), config);
 
