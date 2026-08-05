@@ -190,6 +190,18 @@ test('discoverPrinters merges manual targets and mDNS, dedupes by printer', asyn
   assert.equal(gladys.scans[0].type, 'mdns');
 });
 
+test('discoverPrinters still probes the manual list when the scan result is not an array', async () => {
+  const gladys = createFakeGladys({ mdnsEntries: { unexpected: 'shape' } });
+  const cfg = normalizeConfig({ printer_hosts: '192.168.1.20' });
+  const { printers } = await discoverPrinters(gladys, cfg, {
+    probe: async () => ({
+      url: 'http://192.168.1.20:631/ipp/print',
+      attributes: COLOR_INKJET_ATTRIBUTES,
+    }),
+  });
+  assert.equal(printers.length, 1);
+});
+
 test('discoverPrinters keeps working when the mDNS scan is unavailable', async () => {
   const gladys = createFakeGladys({ mdnsEntries: new Error('mediated discovery unsupported') });
   const cfg = normalizeConfig({ printer_hosts: '192.168.1.20' });

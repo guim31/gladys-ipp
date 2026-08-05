@@ -64,6 +64,10 @@ export function buildPrinterDevice(gladys, { printer, url }, config) {
       external_id: ids.feature(STATE_FEATURE_KEY),
       category: DEVICE_FEATURE_CATEGORIES.TEXT,
       type: DEVICE_FEATURE_TYPES.TEXT.TEXT,
+      // Text features carry no numeric range, but min/max are part of the
+      // standard Gladys feature shape: declare a neutral range.
+      min: 0,
+      max: 1,
       read_only: true,
       has_feedback: false,
       keep_history: false,

@@ -50,15 +50,26 @@ export async function discoverPrinters(gladys, config, deps = {}) {
 
   let mdnsEntries = [];
   try {
-    mdnsEntries = await gladys.scanNetwork('mdns', { timeoutSeconds: scanTimeoutSeconds });
+    const scanned = await gladys.scanNetwork('mdns', { timeoutSeconds: scanTimeoutSeconds });
+    // Be defensive about the response shape: a scan must NEVER prevent the
+    // manual list from being probed.
+    mdnsEntries = Array.isArray(scanned) ? scanned : (scanned?.results ?? []);
+    if (!Array.isArray(mdnsEntries)) {
+      logger.warn(`mDNS scan returned an unexpected shape (${typeof scanned}), ignoring it`);
+      mdnsEntries = [];
+    }
     logger.info(`mDNS scan: ${mdnsEntries.length} _ipp._tcp service(s) seen`);
   } catch (err) {
     logger.warn(`mDNS scan unavailable (${err.message}), using the manual list only`);
   }
   for (const entry of mdnsEntries) {
-    const url = mdnsCandidateUrl(entry);
-    if (url && !targets.includes(url)) {
-      targets.push(url);
+    try {
+      const url = mdnsCandidateUrl(entry);
+      if (url && !targets.includes(url)) {
+        targets.push(url);
+      }
+    } catch (err) {
+      logger.warn(`Ignoring malformed mDNS entry (${err.message})`);
     }
   }
 

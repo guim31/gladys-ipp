@@ -35,10 +35,25 @@ let config = normalizeConfig();
 async function discoverAndPublish() {
   const { printers, errors } = await discoverPrinters(gladys, config);
   if (printers.length > 0) {
-    await gladys.publishDiscoveredDevices(
-      printers.map((probed) => buildPrinterDevice(gladys, probed, config)),
-    );
-    await gladys.publishStates(printers.flatMap((probed) => buildPrinterStates(gladys, probed)));
+    const devices = printers.map((probed) => buildPrinterDevice(gladys, probed, config));
+    try {
+      await gladys.publishDiscoveredDevices(devices);
+      logger.info(`Published ${devices.length} discovered device(s)`);
+    } catch (err) {
+      // Surface the host API refusal in clear text: this is THE line to look
+      // for when the Discovery screen stays empty.
+      logger.error(`publishDiscoveredDevices refused by Gladys: ${err.message}`);
+      logger.debug(`Refused payload: ${JSON.stringify(devices)}`);
+      throw err;
+    }
+    try {
+      // Fresh states right away, so added devices show values without waiting
+      // for the first poll. Gladys may refuse states for devices the user has
+      // not added yet: that must not fail the discovery itself.
+      await gladys.publishStates(printers.flatMap((probed) => buildPrinterStates(gladys, probed)));
+    } catch (err) {
+      logger.warn(`Initial states refused (devices not added yet?): ${err.message}`);
+    }
   }
   logger.info(`Discovery done: ${printers.length} printer(s), ${errors.length} target(s) failed`);
   return printers.length;
