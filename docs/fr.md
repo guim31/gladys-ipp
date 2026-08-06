@@ -75,6 +75,13 @@ cas l'appareil n'expose que son état.
 - **Pas de niveaux d'encre** : l'imprimante ne publie pas les attributs
   `marker-levels` via IPP. C'est une limite du firmware, pas de
   l'intégration.
+- **Une seule cartouche affiche « inconnu » (souvent le noir, sur HP)** : si
+  cette cartouche est rechargée ou compatible, c'est voulu par HP — le
+  firmware refuse d'estimer le niveau des cartouches non authentiques (il
+  affiche « ? » jusque sur l'écran de l'imprimante). La valeur n'existe
+  nulle part ; avec une cartouche d'origine, le niveau réapparaît tout seul.
+  Le bouton « Tester une imprimante » montre la valeur brute renvoyée
+  (« inconnu (-2) »).
 - **Chemin IPP non standard** : par défaut l'intégration essaie
   `/ipp/print`, `/ipp` puis `/`. Si votre imprimante utilise un autre chemin
   (certaines files CUPS par exemple), saisissez l'URI complète :

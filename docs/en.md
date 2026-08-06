@@ -69,6 +69,12 @@ device only exposes its state.
 - **No ink levels**: the printer does not publish the `marker-levels`
   attributes over IPP. That is a firmware limitation, not an integration
   one.
+- **A single cartridge shows "unknown" (often the black one, on HP)**: if
+  that cartridge is refilled or third-party, this is by HP design — the
+  firmware refuses to estimate the level of non-genuine cartridges (it shows
+  "?" even on the printer's own screen). The value exists nowhere; with a
+  genuine cartridge the level comes back by itself. The "Test a printer"
+  button shows the raw reported value ("unknown (-2)").
 - **Non-standard IPP path**: by default the integration tries `/ipp/print`,
   `/ipp` then `/`. If your printer uses another path (some CUPS queues for
   instance), type the full URI: `ipp://host:631/the/path`.
