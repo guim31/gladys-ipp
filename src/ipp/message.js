@@ -44,15 +44,27 @@ function encodeAttribute(tag, name, values) {
 
 /**
  * Encode a Get-Printer-Attributes request.
+ *
+ * `requesting-user-name` is optional per the RFC but some minimalist
+ * firmwares (Epson EcoTank...) answer HTTP 500 without it, so it is always
+ * sent. A null `requestedAttributes` omits the attribute entirely: the
+ * server then defaults to 'all' — the fallback for firmwares that choke on
+ * an explicit list.
  * @param {string} printerUri the ipp:// URI of the printer (goes INSIDE the message)
- * @param {string[]} requestedAttributes attribute names to request
+ * @param {string[]|null} requestedAttributes attribute names, or null for server-default (all)
  * @param {number} [requestId]
+ * @param {{ version?: [number, number] }} [options] IPP version, default 1.1
  * @returns {Buffer}
  */
-export function encodeGetPrinterAttributes(printerUri, requestedAttributes, requestId = 1) {
+export function encodeGetPrinterAttributes(
+  printerUri,
+  requestedAttributes,
+  requestId = 1,
+  { version = [1, 1] } = {},
+) {
   const header = Buffer.alloc(8);
-  header.writeUInt8(1, 0); // version 1.1: the most widely supported
-  header.writeUInt8(1, 1);
+  header.writeUInt8(version[0], 0);
+  header.writeUInt8(version[1], 1);
   header.writeUInt16BE(OPERATIONS.GET_PRINTER_ATTRIBUTES, 2);
   header.writeUInt32BE(requestId, 4);
 
@@ -63,7 +75,10 @@ export function encodeGetPrinterAttributes(printerUri, requestedAttributes, requ
     encodeAttribute(TAGS.CHARSET, 'attributes-charset', ['utf-8']),
     encodeAttribute(TAGS.NATURAL_LANGUAGE, 'attributes-natural-language', ['en']),
     encodeAttribute(TAGS.URI, 'printer-uri', [printerUri]),
-    encodeAttribute(TAGS.KEYWORD, 'requested-attributes', requestedAttributes),
+    encodeAttribute(TAGS.NAME_WITHOUT_LANGUAGE, 'requesting-user-name', ['gladys-ipp']),
+    ...(requestedAttributes && requestedAttributes.length > 0
+      ? [encodeAttribute(TAGS.KEYWORD, 'requested-attributes', requestedAttributes)]
+      : []),
     Buffer.from([GROUPS.END_OF_ATTRIBUTES]),
   ]);
 }

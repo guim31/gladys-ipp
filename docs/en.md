@@ -75,6 +75,11 @@ device only exposes its state.
   "?" even on the printer's own screen). The value exists nowhere; with a
   genuine cartridge the level comes back by itself. The "Test a printer"
   button shows the raw reported value ("unknown (-2)").
+- **The printer answers but with an error (HTTP 500)**: common on
+  minimalist firmwares (Epson EcoTank in particular). The integration
+  automatically tries several request variants (IPP 1.1 then 2.0, with and
+  without an explicit attribute list); if they all fail, the "Test a
+  printer" button shows the exact error — paste it on the forum.
 - **Non-standard IPP path**: by default the integration tries `/ipp/print`,
   `/ipp` then `/`. If your printer uses another path (some CUPS queues for
   instance), type the full URI: `ipp://host:631/the/path`.

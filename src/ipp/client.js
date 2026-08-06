@@ -83,32 +83,91 @@ export function toIppUri(httpUrl) {
   return `${scheme}://${url.hostname}:${port}${url.pathname}`;
 }
 
+// Request variants, tried in order until one works. Standards-compliant
+// printers accept the first; the others cover the classic quirks of
+// minimalist firmwares (Epson EcoTank and friends): some require IPP 2.0,
+// some answer HTTP 500 to an explicit requested-attributes list.
+const REQUEST_VARIANTS = [
+  { version: [1, 1], requestedAttributes: REQUESTED_ATTRIBUTES, label: 'ipp1.1' },
+  { version: [2, 0], requestedAttributes: REQUESTED_ATTRIBUTES, label: 'ipp2.0' },
+  { version: [2, 0], requestedAttributes: null, label: 'ipp2.0-all' },
+];
+
+// Variant index that worked last, per URL: a printer needing IPP 2.0 costs
+// one failed 1.1 request on the FIRST query only, not on every poll.
+const workingVariant = new Map();
+
+/** Reset the variant cache (tests only). */
+export function resetVariantCache() {
+  workingVariant.clear();
+}
+
 /**
- * Send a Get-Printer-Attributes request and return the printer attributes.
- * @param {string} url HTTP URL of the IPP endpoint
- * @param {{ timeoutMs?: number, requestedAttributes?: string[] }} [options]
+ * Send one Get-Printer-Attributes request with a specific variant.
+ * @param {string} url
+ * @param {{ version: [number, number], requestedAttributes: string[]|null }} variant
+ * @param {number} timeoutMs
  * @returns {Promise<Record<string, unknown>>}
  */
-export async function getPrinterAttributes(url, options = {}) {
-  const { timeoutMs = 10_000, requestedAttributes = REQUESTED_ATTRIBUTES } = options;
-  const body = encodeGetPrinterAttributes(toIppUri(url), requestedAttributes);
-
-  logger.debug(`Get-Printer-Attributes -> ${url}`);
+async function requestWithVariant(url, variant, timeoutMs) {
+  const body = encodeGetPrinterAttributes(toIppUri(url), variant.requestedAttributes, 1, {
+    version: variant.version,
+  });
   const response = await fetch(url, {
     method: 'POST',
-    headers: { 'content-type': 'application/ipp' },
+    // Some firmwares also reject requests without a User-Agent.
+    headers: { 'content-type': 'application/ipp', 'user-agent': 'gladys-ipp' },
     body,
     signal: AbortSignal.timeout(timeoutMs),
   });
   if (!response.ok) {
     throw new Error(`HTTP ${response.status} from ${url}`);
   }
-
   const message = decodeMessage(Buffer.from(await response.arrayBuffer()));
   if (message.statusCode > STATUS.SUCCESSFUL_OK_MAX) {
     throw new Error(`IPP status 0x${message.statusCode.toString(16).padStart(4, '0')} from ${url}`);
   }
   return printerAttributes(message);
+}
+
+/**
+ * Send a Get-Printer-Attributes request and return the printer attributes.
+ * Tries the request variants in order (starting with the one that worked
+ * last for this URL) until one succeeds.
+ * @param {string} url HTTP URL of the IPP endpoint
+ * @param {{ timeoutMs?: number }} [options]
+ * @returns {Promise<Record<string, unknown>>}
+ */
+export async function getPrinterAttributes(url, options = {}) {
+  const { timeoutMs = 10_000 } = options;
+  const known = workingVariant.get(url);
+  const order =
+    known === undefined
+      ? REQUEST_VARIANTS.map((_, i) => i)
+      : [known, ...REQUEST_VARIANTS.map((_, i) => i).filter((i) => i !== known)];
+
+  let lastError = null;
+  for (const index of order) {
+    const variant = REQUEST_VARIANTS[index];
+    try {
+      logger.debug(`Get-Printer-Attributes (${variant.label}) -> ${url}`);
+      const attributes = await requestWithVariant(url, variant, timeoutMs);
+      workingVariant.set(url, index);
+      if (index !== 0) {
+        logger.info(`${url} answered with the ${variant.label} compatibility variant`);
+      }
+      return attributes;
+    } catch (err) {
+      logger.debug(`Variant ${variant.label} failed on ${url}: ${err.message}`);
+      lastError = err;
+      // A network-level failure (no HTTP answer at all) will fail identically
+      // for every variant: stop here instead of hammering a dead host.
+      if (!/^(HTTP|IPP status)/.test(err.message)) {
+        break;
+      }
+    }
+  }
+  throw lastError;
 }
 
 /**
