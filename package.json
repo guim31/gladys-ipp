@@ -1,6 +1,6 @@
 {
   "name": "gladys-ipp",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "private": true,
   "description": "Gladys Assistant external integration: monitor network printers (ink levels, state) over IPP.",
   "type": "module",

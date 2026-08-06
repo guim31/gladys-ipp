@@ -15,8 +15,11 @@ export const DEFAULT_CONFIG = {
   // Manual printer list: hosts, IPs or ipp:// URIs, separated by commas,
   // semicolons or newlines. Optional: mDNS discovery also finds printers.
   printer_hosts: '',
-  // Seconds between two polls of each printer. Ink levels move slowly.
+  // Seconds between two recordings of the ink/toner levels.
   poll_frequency: 900,
+  // Language of the feature names: 'printer' keeps the raw names reported by
+  // the printer, 'fr'/'en' translate the recognized supplies.
+  feature_names: 'printer',
 };
 
 /**
@@ -30,6 +33,9 @@ export function normalizeConfig(raw = {}) {
     ...raw,
     printer_hosts: String(raw.printer_hosts ?? DEFAULT_CONFIG.printer_hosts),
     poll_frequency: Number.isFinite(pollFrequency) ? pollFrequency : DEFAULT_CONFIG.poll_frequency,
+    feature_names: ['printer', 'fr', 'en'].includes(raw.feature_names)
+      ? raw.feature_names
+      : DEFAULT_CONFIG.feature_names,
   };
 }
 

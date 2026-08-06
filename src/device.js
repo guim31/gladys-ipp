@@ -17,6 +17,7 @@ import {
   DEVICE_FEATURE_UNITS,
 } from '@gladysassistant/integration-sdk';
 import { getPrinterAttributes } from './ipp/client.js';
+import { displayMarkerName, displayStateName } from './naming.js';
 import { parsePrinter, slugify } from './printer.js';
 
 export const DEVICE_TYPE = 'printer';
@@ -76,15 +77,19 @@ function deviceName(printer, url) {
 
 /**
  * Build the Gladys discovery payload for one probed printer.
+ * Feature names follow config.feature_names ('printer' raw / 'fr' / 'en');
+ * feature KEYS always derive from the raw printer names, so switching the
+ * language never changes the external_ids nor loses history.
  * @param {object} gladys SDK instance
  * @param {{ printer: object, url: string }} probed
- * @param {object} _config reserved (device shape no longer depends on it)
+ * @param {{ feature_names?: string }} config
  */
-export function buildPrinterDevice(gladys, { printer, url }, _config) {
+export function buildPrinterDevice(gladys, { printer, url }, config = {}) {
+  const lang = config.feature_names ?? 'printer';
   const ids = gladys.externalIds(DEVICE_TYPE, platformIdFor(printer, url));
   const features = [
     {
-      name: 'State',
+      name: displayStateName(lang),
       external_id: ids.feature(STATE_FEATURE_KEY),
       category: DEVICE_FEATURE_CATEGORIES.TEXT,
       type: DEVICE_FEATURE_TYPES.TEXT.TEXT,
@@ -100,7 +105,7 @@ export function buildPrinterDevice(gladys, { printer, url }, _config) {
     ...printer.markers
       .filter((marker) => marker.percent !== null)
       .map((marker) => ({
-        name: marker.name,
+        name: displayMarkerName(marker, lang),
         external_id: ids.feature(`marker:${marker.key}`),
         category: DEVICE_FEATURE_CATEGORIES.LEVEL_SENSOR,
         // A supply level IS a level expressed as a percentage. This type also

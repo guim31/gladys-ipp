@@ -43,7 +43,13 @@ device only exposes its state.
 3. Adjust the **refresh interval** if needed (900 s by default — ink levels
    move slowly). It only applies to the levels: the state is watched
    continuously (every 15 s).
-4. Add the discovered devices from the **Discovery** tab.
+4. Pick the language of the **sensor names** if you wish: by default they are
+   the raw names reported by the printer (usually English, like "black
+   cartridge"); selecting French turns the recognized cartridges into
+   « Encre noire », « Toner cyan »… The setting applies to **newly added**
+   devices — for an existing device, rename its features from its page, or
+   delete and re-add it (the history of the old features is then lost).
+5. Add the discovered devices from the **Discovery** tab.
 
 > Tip: give a fixed IP (DHCP reservation) to printers that do not advertise
 > their unique id (UUID) — the integration then falls back to the hostname to

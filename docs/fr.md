@@ -46,7 +46,14 @@ cas l'appareil n'expose que son état.
 3. Ajustez au besoin l'**intervalle de rafraîchissement** (900 s par défaut —
    les niveaux d'encre évoluent lentement). Il ne concerne que les niveaux :
    l'état est surveillé en continu (toutes les 15 s).
-4. Ajoutez les appareils découverts depuis l'onglet **Découverte**.
+4. Choisissez au besoin la langue des **noms des capteurs** : par défaut ce
+   sont les noms bruts annoncés par l'imprimante (souvent en anglais, du type
+   « black cartridge ») ; en sélectionnant Français, les cartouches reconnues
+   deviennent « Encre noire », « Toner cyan »… Le réglage s'applique aux
+   appareils **nouvellement ajoutés** — pour un appareil existant, renommez
+   ses fonctionnalités depuis sa page, ou supprimez-le puis re-ajoutez-le
+   (l'historique des anciennes fonctionnalités est alors perdu).
+5. Ajoutez les appareils découverts depuis l'onglet **Découverte**.
 
 > Conseil : attribuez une IP fixe (réservation DHCP) aux imprimantes dont
 > l'identifiant unique (UUID) n'est pas annoncé — l'intégration se rabat
