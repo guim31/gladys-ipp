@@ -114,12 +114,17 @@ export function parsePrinter(attributes) {
       suffix += 1;
     }
     usedKeys.add(key);
+    const rawLevel = Number(levels[i]);
     markers.push({
       key,
       name,
       color: colors[i] != null ? String(colors[i]) : null,
       type: types[i] != null ? String(types[i]) : null,
       percent: markerPercent(levels[i], highs[i]),
+      // Raw marker-levels value, kept for diagnostics: when percent is null,
+      // it tells WHY (-1 not reported, -2 unknown, -3 "some left" — the IPP
+      // sentinels — or null when the value is simply missing from the array).
+      rawLevel: Number.isFinite(rawLevel) ? rawLevel : null,
     });
   }
 

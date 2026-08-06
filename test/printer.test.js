@@ -117,6 +117,19 @@ test('parsePrinter names unnamed markers by position', () => {
   );
 });
 
+test('parsePrinter keeps the raw level for diagnostics', () => {
+  const printer = parsePrinter({
+    'marker-names': ['Black', 'Cyan', 'Magenta'],
+    'marker-levels': [-2, 50], // black unknown, magenta missing entirely
+  });
+  assert.equal(printer.markers[0].percent, null);
+  assert.equal(printer.markers[0].rawLevel, -2);
+  assert.equal(printer.markers[1].percent, 50);
+  assert.equal(printer.markers[1].rawLevel, 50);
+  assert.equal(printer.markers[2].percent, null);
+  assert.equal(printer.markers[2].rawLevel, null);
+});
+
 test('parsePrinter tolerates a printer with no marker attributes at all', () => {
   const printer = parsePrinter({ 'printer-state': 3 });
   assert.deepEqual(printer.markers, []);

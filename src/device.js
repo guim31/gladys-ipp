@@ -224,7 +224,11 @@ export async function pollPrinter(gladys, device, config, deps = {}) {
     lastLevelsAt.set(device.external_id, now());
     logger.info(
       `Poll ${device.external_id}: ${printer.stateText}, ` +
-        `${printer.markers.map((m) => `${m.name}=${m.percent ?? '?'}%`).join(', ') || 'no marker'}`,
+        `${
+          printer.markers
+            .map((m) => `${m.name}=${m.percent !== null ? `${m.percent}%` : `raw:${m.rawLevel}`}`)
+            .join(', ') || 'no marker'
+        }`,
     );
   } else {
     logger.info(`Poll ${device.external_id}: state -> "${printer.stateText}"`);
