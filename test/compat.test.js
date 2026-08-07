@@ -7,9 +7,16 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
-import { getPrinterAttributes, resetVariantCache } from '../src/ipp/client.js';
+import { createServer as createHttpsServer } from 'node:https';
+import { readFileSync } from 'node:fs';
+import { getPrinterAttributes, probePrinter, resetVariantCache } from '../src/ipp/client.js';
 import { decodeMessage, encodeGetPrinterAttributes } from '../src/ipp/message.js';
 import { colorInkjetResponse } from './helpers/ippFixtures.js';
+
+const TLS_FIXTURE = {
+  key: readFileSync(new URL('./helpers/fixtures/localhost-key.pem', import.meta.url)),
+  cert: readFileSync(new URL('./helpers/fixtures/localhost-cert.pem', import.meta.url)),
+};
 
 // --- request encoding --------------------------------------------------------
 
@@ -71,6 +78,43 @@ test('getPrinterAttributes falls back to IPP 2.0 and remembers the variant', asy
   } finally {
     server.close();
   }
+});
+
+// --- encrypted IPP (HTTP 426 -> ipps) ----------------------------------------
+
+test('getPrinterAttributes accepts a self-signed TLS printer (ipps)', async () => {
+  resetVariantCache();
+  // Printers requiring encrypted IPP present self-signed certificates: the
+  // transport must accept them or every ipps-only printer is unreachable.
+  const server = createHttpsServer(TLS_FIXTURE, (req, res) => {
+    res.writeHead(200, { 'content-type': 'application/ipp' }).end(colorInkjetResponse());
+  });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const { port } = server.address();
+  try {
+    const attributes = await getPrinterAttributes(`https://127.0.0.1:${port}/ipp/print`);
+    assert.equal(attributes['printer-make-and-model'], 'HP OfficeJet Pro 9010');
+  } finally {
+    server.close();
+  }
+});
+
+test('probePrinter answers HTTP 426 by trying the https twin of the same path', async () => {
+  const tried = [];
+  const fetchAttributes = async (url) => {
+    tried.push(url);
+    if (url === 'https://192.168.1.51:631/ipp/print') {
+      return { 'printer-state': 3 };
+    }
+    throw new Error(`HTTP 426 from ${url}`);
+  };
+  const { url } = await probePrinter('192.168.1.51', { fetchAttributes });
+  assert.equal(url, 'https://192.168.1.51:631/ipp/print');
+  assert.deepEqual(
+    tried.slice(0, 2),
+    ['http://192.168.1.51:631/ipp/print', 'https://192.168.1.51:631/ipp/print'],
+    'the https twin must be tried right after the 426, before the other paths',
+  );
 });
 
 test('getPrinterAttributes does not retry variants on a network failure', async () => {

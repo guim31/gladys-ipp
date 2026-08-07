@@ -11,6 +11,7 @@
 import { createLogger } from '@gladysassistant/integration-sdk';
 import { STATUS } from './constants.js';
 import { decodeMessage, encodeGetPrinterAttributes, printerAttributes } from './message.js';
+import { postIpp } from './transport.js';
 
 const logger = createLogger({ name: 'ipp-client' });
 
@@ -113,17 +114,11 @@ async function requestWithVariant(url, variant, timeoutMs) {
   const body = encodeGetPrinterAttributes(toIppUri(url), variant.requestedAttributes, 1, {
     version: variant.version,
   });
-  const response = await fetch(url, {
-    method: 'POST',
-    // Some firmwares also reject requests without a User-Agent.
-    headers: { 'content-type': 'application/ipp', 'user-agent': 'gladys-ipp' },
-    body,
-    signal: AbortSignal.timeout(timeoutMs),
-  });
-  if (!response.ok) {
-    throw new Error(`HTTP ${response.status} from ${url}`);
+  const { status, body: responseBody } = await postIpp(url, body, timeoutMs);
+  if (status < 200 || status >= 300) {
+    throw new Error(`HTTP ${status} from ${url}`);
   }
-  const message = decodeMessage(Buffer.from(await response.arrayBuffer()));
+  const message = decodeMessage(responseBody);
   if (message.statusCode > STATUS.SUCCESSFUL_OK_MAX) {
     throw new Error(`IPP status 0x${message.statusCode.toString(16).padStart(4, '0')} from ${url}`);
   }
@@ -161,8 +156,10 @@ export async function getPrinterAttributes(url, options = {}) {
       logger.debug(`Variant ${variant.label} failed on ${url}: ${err.message}`);
       lastError = err;
       // A network-level failure (no HTTP answer at all) will fail identically
-      // for every variant: stop here instead of hammering a dead host.
-      if (!/^(HTTP|IPP status)/.test(err.message)) {
+      // for every variant: stop here instead of hammering a dead host. Same
+      // for HTTP 426 (Upgrade Required): it is about the TRANSPORT — the
+      // printer wants TLS — not about the request shape.
+      if (!/^(HTTP|IPP status)/.test(err.message) || /^HTTP 426 /.test(err.message)) {
         break;
       }
     }
@@ -179,18 +176,30 @@ export async function getPrinterAttributes(url, options = {}) {
  */
 export async function probePrinter(target, options = {}) {
   const { fetchAttributes = getPrinterAttributes, timeoutMs } = options;
-  const urls = candidateUrls(target);
-  if (urls.length === 0) {
+  const queue = candidateUrls(target);
+  if (queue.length === 0) {
     throw new Error('Empty printer target');
   }
+  const tried = new Set();
   let lastError = null;
-  for (const url of urls) {
+  while (queue.length > 0) {
+    const url = queue.shift();
+    if (tried.has(url)) {
+      continue;
+    }
+    tried.add(url);
     try {
       const attributes = await fetchAttributes(url, { timeoutMs });
       return { url, attributes };
     } catch (err) {
       logger.debug(`Probe failed on ${url}: ${err.message}`);
       lastError = err;
+      // HTTP 426 Upgrade Required: the printer only accepts encrypted IPP on
+      // this endpoint (Epson EcoTank...). Try the https twin of the SAME
+      // path first — that is exactly what the 426 asks for.
+      if (/HTTP 426 /.test(err.message) && url.startsWith('http://')) {
+        queue.unshift(`https://${url.slice('http://'.length)}`);
+      }
     }
   }
   throw new Error(`Printer "${target}" unreachable over IPP (${lastError?.message})`);

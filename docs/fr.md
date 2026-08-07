@@ -82,11 +82,12 @@ cas l'appareil n'expose que son état.
   nulle part ; avec une cartouche d'origine, le niveau réapparaît tout seul.
   Le bouton « Tester une imprimante » montre la valeur brute renvoyée
   (« inconnu (-2) »).
-- **L'imprimante répond mais en erreur (HTTP 500)** : fréquent sur les
-  firmwares minimalistes (Epson EcoTank notamment). L'intégration essaie
+- **L'imprimante répond mais en erreur (HTTP 500, HTTP 426)** : fréquent sur
+  les firmwares minimalistes (Epson EcoTank notamment). L'intégration essaie
   automatiquement plusieurs variantes de requête (IPP 1.1 puis 2.0, avec puis
-  sans liste d'attributs) ; si toutes échouent, le bouton « Tester une
-  imprimante » affiche l'erreur exacte — collez-la sur le forum.
+  sans liste d'attributs) et bascule d'elle-même en IPP chiffré (`ipps://`)
+  quand l'imprimante l'exige (HTTP 426). Si tout échoue, le bouton « Tester
+  une imprimante » affiche l'erreur exacte — collez-la sur le forum.
 - **Chemin IPP non standard** : par défaut l'intégration essaie
   `/ipp/print`, `/ipp` puis `/`. Si votre imprimante utilise un autre chemin
   (certaines files CUPS par exemple), saisissez l'URI complète :
