@@ -16,6 +16,23 @@ import { platformIdFor } from './device.js';
 const logger = createLogger({ name: 'discovery' });
 
 /**
+ * Is this mDNS entry really an `_ipp._tcp` printer service?
+ *
+ * The Gladys core mDNS scan aggregates every SRV record found in the
+ * responses, and only filters PTR records by service type. Chatty hosts
+ * (NAS, box, Home Assistant, Matter devices...) pack the SRV records of
+ * their OTHER services (_ssh._tcp:22, _ftp._tcp:21, _smb._tcp:445...) in the
+ * additionals of an _ipp._tcp answer, so those leak in as fake "printers".
+ * Probing them would turn discovery into a port scan — refuse anything whose
+ * instance name is not an _ipp._tcp service.
+ * @param {{ name?: string }} entry
+ * @returns {boolean}
+ */
+export function isIppServiceEntry(entry) {
+  return typeof entry?.name === 'string' && /\._ipp\._tcp\b/i.test(entry.name);
+}
+
+/**
  * Build the candidate URL of an mDNS `_ipp._tcp` service instance.
  * The TXT record `rp` carries the resource path (e.g. 'ipp/print').
  * @param {{ host: string, addresses?: string[], port?: number, txt?: Record<string, string> }} entry
@@ -53,12 +70,20 @@ export async function discoverPrinters(gladys, config, deps = {}) {
     const scanned = await gladys.scanNetwork('mdns', { timeoutSeconds: scanTimeoutSeconds });
     // Be defensive about the response shape: a scan must NEVER prevent the
     // manual list from being probed.
-    mdnsEntries = Array.isArray(scanned) ? scanned : (scanned?.results ?? []);
-    if (!Array.isArray(mdnsEntries)) {
+    const raw = Array.isArray(scanned) ? scanned : (scanned?.results ?? []);
+    if (!Array.isArray(raw)) {
       logger.warn(`mDNS scan returned an unexpected shape (${typeof scanned}), ignoring it`);
-      mdnsEntries = [];
+    } else {
+      // The core mixes non-printer SRV records into the results: keep only the
+      // genuine _ipp._tcp instances, or discovery would probe every service on
+      // the LAN (SSH, SMB, Home Assistant...) on its own port.
+      mdnsEntries = raw.filter(isIppServiceEntry);
+      const dropped = raw.length - mdnsEntries.length;
+      logger.info(
+        `mDNS scan: ${mdnsEntries.length} printer service(s)` +
+          (dropped > 0 ? ` (${dropped} non-printer mDNS entries ignored)` : ''),
+      );
     }
-    logger.info(`mDNS scan: ${mdnsEntries.length} _ipp._tcp service(s) seen`);
   } catch (err) {
     logger.warn(`mDNS scan unavailable (${err.message}), using the manual list only`);
   }

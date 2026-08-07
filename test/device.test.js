@@ -15,7 +15,7 @@ import {
   PRINTER_URL_PARAM,
   resetPollThrottle,
 } from '../src/device.js';
-import { discoverPrinters, mdnsCandidateUrl } from '../src/discovery.js';
+import { discoverPrinters, isIppServiceEntry, mdnsCandidateUrl } from '../src/discovery.js';
 import { parsePrinter } from '../src/printer.js';
 import { normalizeConfig } from '../src/config.js';
 import { createFakeGladys } from './helpers/fakeGladys.js';
@@ -293,7 +293,13 @@ test('mdnsCandidateUrl skips IPv6 addresses and defaults the path', () => {
 test('discoverPrinters merges manual targets and mDNS, dedupes by printer', async () => {
   const gladys = createFakeGladys({
     mdnsEntries: [
-      { host: 'printer.local', addresses: ['192.168.1.20'], port: 631, txt: { rp: 'ipp/print' } },
+      {
+        name: 'Printer._ipp._tcp.local',
+        host: 'printer.local',
+        addresses: ['192.168.1.20'],
+        port: 631,
+        txt: { rp: 'ipp/print' },
+      },
     ],
   });
   // The manual entry and the mDNS entry lead to the SAME printer (same uuid).
@@ -308,6 +314,57 @@ test('discoverPrinters merges manual targets and mDNS, dedupes by printer', asyn
   assert.equal(errors.length, 0);
   assert.equal(gladys.scans.length, 1);
   assert.equal(gladys.scans[0].type, 'mdns');
+});
+
+test('isIppServiceEntry keeps only genuine _ipp._tcp instances', () => {
+  assert.equal(isIppServiceEntry({ name: 'HP LaserJet._ipp._tcp.local' }), true);
+  assert.equal(isIppServiceEntry({ name: 'nas._ssh._tcp.local' }), false);
+  assert.equal(isIppServiceEntry({ name: 'box._smb._tcp.local' }), false);
+  assert.equal(isIppServiceEntry({ name: 'device._matter._tcp.local' }), false);
+  assert.equal(isIppServiceEntry({ host: 'x', port: 22 }), false); // no name at all
+  assert.equal(isIppServiceEntry(undefined), false);
+});
+
+test('discoverPrinters ignores non-printer mDNS entries instead of probing them', async () => {
+  // Reproduces the forum case: a chatty LAN where the core mixes SSH/SMB/HA
+  // SRV records into the _ipp._tcp scan. Only the real printer must be probed.
+  const gladys = createFakeGladys({
+    mdnsEntries: [
+      {
+        name: 'Real Printer._ipp._tcp.local',
+        host: 'printer.local',
+        addresses: ['192.168.1.26'],
+        port: 631,
+        txt: { rp: 'ipp/print' },
+      },
+      { name: 'nas._ssh._tcp.local', host: 'nas.local', addresses: ['192.168.1.94'], port: 22 },
+      {
+        name: 'server._smb._tcp.local',
+        host: 'srv.local',
+        addresses: ['192.168.1.250'],
+        port: 445,
+      },
+      {
+        name: 'ha._home-assistant._tcp.local',
+        host: 'ha.local',
+        addresses: ['192.168.1.93'],
+        port: 8123,
+      },
+    ],
+  });
+  const probed = [];
+  const { printers } = await discoverPrinters(gladys, normalizeConfig(), {
+    probe: async (target) => {
+      probed.push(target);
+      return { url: 'http://192.168.1.26:631/ipp/print', attributes: COLOR_INKJET_ATTRIBUTES };
+    },
+  });
+  assert.equal(printers.length, 1);
+  assert.deepEqual(
+    probed,
+    ['http://192.168.1.26:631/ipp/print'],
+    'only the real printer must be contacted — never SSH/SMB/HA ports',
+  );
 });
 
 test('discoverPrinters still probes the manual list when the scan result is not an array', async () => {
