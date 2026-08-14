@@ -75,6 +75,22 @@ test('the manifest declares the mDNS capture the discovery code relies on', () =
   assert.equal(mdns[0].service, '_ipp._tcp');
 });
 
+test('declaring catalog categories requires Gladys >= 4.86.0', () => {
+  // The store vocabulary itself is checked by the store validator (unknown
+  // keys are dropped with a warning there) — what this test pins is the
+  // coupling rule: older cores reject any unknown manifest field, so a
+  // manifest declaring `categories` must not claim compatibility below the
+  // first release that accepts it.
+  assert.ok(manifest.categories.length >= 1 && manifest.categories.length <= 3);
+  const minVersion = manifest.gladys_version.match(/>=\s*(\d+)\.(\d+)\.\d+/);
+  assert.ok(minVersion, 'gladys_version must declare a minimum version');
+  const [, major, minor] = minVersion.map(Number);
+  assert.ok(
+    major > 4 || (major === 4 && minor >= 86),
+    `categories requires gladys_version >= 4.86.0, got "${manifest.gladys_version}"`,
+  );
+});
+
 test('docker and cover images point at this repository', () => {
   assert.match(manifest.docker_image, /^ghcr\.io\/guim31\/gladys-ipp:/);
   assert.match(
