@@ -98,9 +98,27 @@ const REQUEST_VARIANTS = [
 // one failed 1.1 request on the FIRST query only, not on every poll.
 const workingVariant = new Map();
 
+// URLs where every variant was tried and none announced supplies: skip the
+// supply sweep on later polls (one request each) instead of re-trying the
+// whole cascade every 15 s on printers that genuinely report nothing.
+const supplySweepDone = new Set();
+
 /** Reset the variant cache (tests only). */
 export function resetVariantCache() {
   workingVariant.clear();
+  supplySweepDone.clear();
+}
+
+/**
+ * Does this response announce printer supplies?
+ * @param {Record<string, unknown>} attributes
+ * @returns {boolean}
+ */
+function hasSupplyAttributes(attributes) {
+  return ['marker-names', 'marker-levels'].some((name) => {
+    const value = attributes[name];
+    return value !== undefined && value !== null && !(Array.isArray(value) && value.length === 0);
+  });
 }
 
 /**
@@ -142,16 +160,29 @@ export async function getPrinterAttributes(url, options = {}) {
       : [known, ...REQUEST_VARIANTS.map((_, i) => i).filter((i) => i !== known)];
 
   let lastError = null;
+  // First successful answer without supply attributes, kept in case no other
+  // variant announces them either.
+  let fallback = null;
   for (const index of order) {
     const variant = REQUEST_VARIANTS[index];
     try {
       logger.debug(`Get-Printer-Attributes (${variant.label}) -> ${url}`);
       const attributes = await requestWithVariant(url, variant, timeoutMs);
-      workingVariant.set(url, index);
-      if (index !== 0) {
-        logger.info(`${url} answered with the ${variant.label} compatibility variant`);
+      if (hasSupplyAttributes(attributes) || supplySweepDone.has(url)) {
+        workingVariant.set(url, index);
+        if (index !== 0) {
+          logger.info(`${url} answered with the ${variant.label} compatibility variant`);
+        }
+        return attributes;
       }
-      return attributes;
+      // Some firmwares (Epson EcoTank...) omit marker-* when the request
+      // names them in requested-attributes, but DO include them when the
+      // list is left out entirely (the 'all' default). A supply-less success
+      // is therefore not final: keep it and try the remaining variants once.
+      logger.debug(`Variant ${variant.label} answered ${url} without supply attributes`);
+      if (fallback === null) {
+        fallback = { index, attributes };
+      }
     } catch (err) {
       logger.debug(`Variant ${variant.label} failed on ${url}: ${err.message}`);
       lastError = err;
@@ -163,6 +194,14 @@ export async function getPrinterAttributes(url, options = {}) {
         break;
       }
     }
+  }
+  if (fallback !== null) {
+    supplySweepDone.add(url);
+    workingVariant.set(url, fallback.index);
+    logger.info(
+      `${url} announces no supplies with any request variant, keeping ${REQUEST_VARIANTS[fallback.index].label}`,
+    );
+    return fallback.attributes;
   }
   throw lastError;
 }

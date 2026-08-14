@@ -9,9 +9,10 @@ import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { createServer as createHttpsServer } from 'node:https';
 import { readFileSync } from 'node:fs';
+import { TAGS } from '../src/ipp/constants.js';
 import { getPrinterAttributes, probePrinter, resetVariantCache } from '../src/ipp/client.js';
 import { decodeMessage, encodeGetPrinterAttributes } from '../src/ipp/message.js';
-import { colorInkjetResponse } from './helpers/ippFixtures.js';
+import { attr, buildIppResponse, colorInkjetResponse } from './helpers/ippFixtures.js';
 
 const TLS_FIXTURE = {
   key: readFileSync(new URL('./helpers/fixtures/localhost-key.pem', import.meta.url)),
@@ -75,6 +76,78 @@ test('getPrinterAttributes falls back to IPP 2.0 and remembers the variant', asy
     requests.length = 0;
     await getPrinterAttributes(url);
     assert.deepEqual(requests, ['2.0'], 'the working variant must be remembered per URL');
+  } finally {
+    server.close();
+  }
+});
+
+// --- supply sweep (markers only without requested-attributes) ----------------
+
+function startFakeEt2810({ suppliesWhenUnrequested = true } = {}) {
+  // Answers every request cleanly, but omits the marker-* attributes when the
+  // request carries an explicit requested-attributes list — the ET-2810
+  // symptom: discovered fine, state fine, zero cartridges.
+  const requests = [];
+  const server = createServer((req, res) => {
+    const chunks = [];
+    req.on('data', (c) => chunks.push(c));
+    req.on('end', () => {
+      const message = decodeMessage(Buffer.concat(chunks));
+      const requested = message.groups[0].attributes['requested-attributes'];
+      requests.push(requested === undefined ? 'all' : 'list');
+      const body =
+        requested === undefined && suppliesWhenUnrequested
+          ? colorInkjetResponse()
+          : buildIppResponse({
+              printerAttrs: [
+                attr('printer-name', [{ tag: TAGS.NAME_WITHOUT_LANGUAGE, value: 'EPSON ET-2810' }]),
+                attr('printer-state', [{ tag: TAGS.ENUM, value: 3 }]),
+              ],
+            });
+      res.writeHead(200, { 'content-type': 'application/ipp' }).end(body);
+    });
+  });
+  return new Promise((resolve) => {
+    server.listen(0, '127.0.0.1', () => {
+      const { port } = server.address();
+      resolve({ server, requests, url: `http://127.0.0.1:${port}/ipp/print` });
+    });
+  });
+}
+
+test('getPrinterAttributes keeps trying variants when the answer lacks supplies', async () => {
+  resetVariantCache();
+  const { server, requests, url } = await startFakeEt2810();
+  try {
+    const attributes = await getPrinterAttributes(url);
+    assert.deepEqual(attributes['marker-levels'], [42, 71, 18, 93]);
+    assert.deepEqual(
+      requests,
+      ['list', 'list', 'all'],
+      'both explicit-list variants answered without supplies: the all variant must be tried',
+    );
+
+    requests.length = 0;
+    await getPrinterAttributes(url);
+    assert.deepEqual(requests, ['all'], 'the supply-bearing variant must be remembered per URL');
+  } finally {
+    server.close();
+  }
+});
+
+test('getPrinterAttributes sweeps a supply-less printer once, then polls with one request', async () => {
+  resetVariantCache();
+  const { server, requests, url } = await startFakeEt2810({ suppliesWhenUnrequested: false });
+  try {
+    const attributes = await getPrinterAttributes(url);
+    assert.equal(attributes['printer-name'], 'EPSON ET-2810');
+    assert.equal(attributes['printer-state'], 3);
+    assert.equal(attributes['marker-levels'], undefined);
+    assert.equal(requests.length, 3, 'every variant is tried once looking for supplies');
+
+    requests.length = 0;
+    await getPrinterAttributes(url);
+    assert.deepEqual(requests, ['list'], 'no supplies anywhere: later polls must not re-sweep');
   } finally {
     server.close();
   }
