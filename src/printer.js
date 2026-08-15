@@ -52,6 +52,53 @@ export function markerPercent(level, high) {
 }
 
 /**
+ * Parse one printer-supply octetString (PWG 5100.13) into its fields.
+ * The value is a list of "key=value;" pairs, e.g.
+ * "index=1;class=supplyThatIsConsumed;type=ink;unit=percent;
+ *  maxcapacity=100;level=57;colorantname=cyan;".
+ * @param {unknown} value
+ * @returns {Record<string, string>} lowercased keys
+ */
+export function parseSupplyEntry(value) {
+  const fields = {};
+  for (const part of String(value ?? '').split(';')) {
+    const eq = part.indexOf('=');
+    if (eq > 0) {
+      fields[part.slice(0, eq).trim().toLowerCase()] = part.slice(eq + 1).trim();
+    }
+  }
+  return fields;
+}
+
+/**
+ * Build marker rows from the printer-supply / printer-supply-description
+ * attributes (PWG 5100.13) — the OTHER standard way of announcing supplies.
+ * Several firmwares (Epson EcoTank...) implement only this one and never
+ * send the marker-* attributes.
+ * @param {Record<string, unknown>} attributes
+ * @returns {Array<{ name: string, color: string|null, type: string|null,
+ *                   level: unknown, high: unknown }>}
+ */
+function supplyRows(attributes) {
+  const supplies = asArray(attributes['printer-supply']);
+  const descriptions = asArray(attributes['printer-supply-description']);
+  const count = Math.max(supplies.length, descriptions.length);
+  const rows = [];
+  for (let i = 0; i < count; i += 1) {
+    const fields = supplies[i] != null ? parseSupplyEntry(supplies[i]) : {};
+    const description = descriptions[i] != null ? String(descriptions[i]).trim() : '';
+    rows.push({
+      name: description !== '' ? description : (fields.colorantname ?? ''),
+      color: fields.colorantname ?? null,
+      type: fields.type ?? null,
+      level: fields.level,
+      high: fields.maxcapacity,
+    });
+  }
+  return rows;
+}
+
+/**
  * Clean up printer-state-reasons: drop 'none', strip the severity suffix
  * ('media-empty-warning' -> 'media-empty'), dedupe.
  * @param {unknown} reasons
@@ -100,11 +147,27 @@ export function parsePrinter(attributes) {
   const types = asArray(attributes['marker-types']);
   const highs = asArray(attributes['marker-high-levels']);
 
-  const count = Math.max(names.length, levels.length);
+  const markerCount = Math.max(names.length, levels.length);
+  let rows = [];
+  for (let i = 0; i < markerCount; i += 1) {
+    rows.push({
+      name: names[i] != null ? String(names[i]) : '',
+      color: colors[i] != null ? String(colors[i]) : null,
+      type: types[i] != null ? String(types[i]) : null,
+      level: levels[i],
+      high: highs[i],
+    });
+  }
+  if (rows.length === 0) {
+    // No marker-* attributes at all: fall back to the printer-supply pair.
+    // marker-* stays preferred when both exist (richer, and the feature keys
+    // of already-created devices derive from it).
+    rows = supplyRows(attributes);
+  }
+
   const usedKeys = new Set();
-  const markers = [];
-  for (let i = 0; i < count; i += 1) {
-    const name = names[i] != null && names[i] !== '' ? String(names[i]) : `Cartridge ${i + 1}`;
+  const markers = rows.map((row, i) => {
+    const name = row.name !== '' ? row.name : `Cartridge ${i + 1}`;
     // Feature keys derive from the supply NAME (stable across reboots and
     // list reorderings), deduplicated by suffix when two supplies share one.
     let key = slugify(name);
@@ -114,19 +177,19 @@ export function parsePrinter(attributes) {
       suffix += 1;
     }
     usedKeys.add(key);
-    const rawLevel = Number(levels[i]);
-    markers.push({
+    const rawLevel = Number(row.level);
+    return {
       key,
       name,
-      color: colors[i] != null ? String(colors[i]) : null,
-      type: types[i] != null ? String(types[i]) : null,
-      percent: markerPercent(levels[i], highs[i]),
-      // Raw marker-levels value, kept for diagnostics: when percent is null,
-      // it tells WHY (-1 not reported, -2 unknown, -3 "some left" — the IPP
-      // sentinels — or null when the value is simply missing from the array).
+      color: row.color,
+      type: row.type,
+      percent: markerPercent(row.level, row.high),
+      // Raw level value, kept for diagnostics: when percent is null, it
+      // tells WHY (-1 not reported, -2 unknown, -3 "some left" — the IPP
+      // sentinels — or null when the value is simply missing).
       rawLevel: Number.isFinite(rawLevel) ? rawLevel : null,
-    });
-  }
+    };
+  });
 
   const text = (value) => (typeof value === 'string' && value.trim() !== '' ? value.trim() : null);
 

@@ -1,6 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { cleanStateReasons, markerPercent, parsePrinter, slugify } from '../src/printer.js';
+import {
+  cleanStateReasons,
+  markerPercent,
+  parsePrinter,
+  parseSupplyEntry,
+  slugify,
+} from '../src/printer.js';
 import { COLOR_INKJET_ATTRIBUTES } from './helpers/ippFixtures.js';
 
 // --- markerPercent -----------------------------------------------------------
@@ -140,4 +146,64 @@ test('parsePrinter tolerates a printer with no marker attributes at all', () => 
 test('parsePrinter reports unknown for an exotic printer-state', () => {
   assert.equal(parsePrinter({ 'printer-state': 99 }).state, 'unknown');
   assert.equal(parsePrinter({}).state, 'unknown');
+});
+
+// --- printer-supply fallback (PWG 5100.13) -----------------------------------
+
+const ET_2810_SUPPLY_ATTRIBUTES = {
+  'printer-name': 'EPSON ET-2810',
+  'printer-state': 3,
+  'printer-supply-description': ['Black ink', 'Cyan ink', 'Maintenance box'],
+  'printer-supply': [
+    'index=1;class=supplyThatIsConsumed;type=ink;unit=percent;maxcapacity=100;level=57;colorantname=black;',
+    'index=2;class=supplyThatIsConsumed;type=ink;unit=percent;maxcapacity=100;level=-2;colorantname=cyan;',
+    'index=3;class=receptacleThatIsFilled;type=wasteInk;unit=percent;maxcapacity=100;level=8;',
+  ],
+};
+
+test('parseSupplyEntry splits the key=value pairs, lowercasing the keys', () => {
+  const fields = parseSupplyEntry('index=1;Type=ink;unit=percent; level=57 ;colorantname=black;');
+  assert.equal(fields.type, 'ink');
+  assert.equal(fields.level, '57');
+  assert.equal(fields.colorantname, 'black');
+});
+
+test('parsePrinter falls back to printer-supply when marker-* is absent', () => {
+  const printer = parsePrinter(ET_2810_SUPPLY_ATTRIBUTES);
+  assert.equal(printer.markers.length, 3);
+
+  const [black, cyan, waste] = printer.markers;
+  assert.equal(black.name, 'Black ink');
+  assert.equal(black.key, 'black-ink');
+  assert.equal(black.percent, 57);
+  assert.equal(black.color, 'black');
+  assert.equal(black.type, 'ink');
+
+  // The -2 sentinel keeps the same semantics as marker-levels.
+  assert.equal(cyan.percent, null);
+  assert.equal(cyan.rawLevel, -2);
+
+  assert.equal(waste.name, 'Maintenance box');
+  assert.equal(waste.percent, 8);
+  assert.equal(waste.type, 'wasteInk');
+});
+
+test('parsePrinter names a supply from its colorant when no description exists', () => {
+  const printer = parsePrinter({
+    'printer-supply': 'index=1;type=ink;maxcapacity=100;level=30;colorantname=magenta;',
+  });
+  assert.equal(printer.markers.length, 1);
+  assert.equal(printer.markers[0].name, 'magenta');
+  assert.equal(printer.markers[0].percent, 30);
+});
+
+test('parsePrinter prefers marker-* over printer-supply when both exist', () => {
+  const printer = parsePrinter({
+    ...COLOR_INKJET_ATTRIBUTES,
+    'printer-supply': 'index=1;type=ink;maxcapacity=100;level=1;colorantname=black;',
+    'printer-supply-description': 'Should not be used',
+  });
+  assert.equal(printer.markers.length, 4);
+  assert.equal(printer.markers[0].name, 'Black Cartridge');
+  assert.equal(printer.markers[0].percent, 42);
 });

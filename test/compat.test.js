@@ -83,10 +83,12 @@ test('getPrinterAttributes falls back to IPP 2.0 and remembers the variant', asy
 
 // --- supply sweep (markers only without requested-attributes) ----------------
 
-function startFakeEt2810({ suppliesWhenUnrequested = true } = {}) {
+function startFakeEt2810({ suppliesWhenUnrequested = true, supplyPairOnList = false } = {}) {
   // Answers every request cleanly, but omits the marker-* attributes when the
   // request carries an explicit requested-attributes list — the ET-2810
-  // symptom: discovered fine, state fine, zero cartridges.
+  // symptom: discovered fine, state fine, zero cartridges. With
+  // `supplyPairOnList`, the explicit-list answer carries the PWG 5100.13
+  // printer-supply pair instead (the other Epson behavior).
   const requests = [];
   const server = createServer((req, res) => {
     const chunks = [];
@@ -95,15 +97,28 @@ function startFakeEt2810({ suppliesWhenUnrequested = true } = {}) {
       const message = decodeMessage(Buffer.concat(chunks));
       const requested = message.groups[0].attributes['requested-attributes'];
       requests.push(requested === undefined ? 'all' : 'list');
+      const listAttrs = [
+        attr('printer-name', [{ tag: TAGS.NAME_WITHOUT_LANGUAGE, value: 'EPSON ET-2810' }]),
+        attr('printer-state', [{ tag: TAGS.ENUM, value: 3 }]),
+        ...(supplyPairOnList
+          ? [
+              attr('printer-supply-description', [
+                { tag: TAGS.TEXT_WITHOUT_LANGUAGE, value: 'Black ink' },
+              ]),
+              attr('printer-supply', [
+                {
+                  tag: TAGS.OCTET_STRING,
+                  value:
+                    'index=1;type=ink;unit=percent;maxcapacity=100;level=57;colorantname=black;',
+                },
+              ]),
+            ]
+          : []),
+      ];
       const body =
         requested === undefined && suppliesWhenUnrequested
           ? colorInkjetResponse()
-          : buildIppResponse({
-              printerAttrs: [
-                attr('printer-name', [{ tag: TAGS.NAME_WITHOUT_LANGUAGE, value: 'EPSON ET-2810' }]),
-                attr('printer-state', [{ tag: TAGS.ENUM, value: 3 }]),
-              ],
-            });
+          : buildIppResponse({ printerAttrs: listAttrs });
       res.writeHead(200, { 'content-type': 'application/ipp' }).end(body);
     });
   });
@@ -130,6 +145,18 @@ test('getPrinterAttributes keeps trying variants when the answer lacks supplies'
     requests.length = 0;
     await getPrinterAttributes(url);
     assert.deepEqual(requests, ['all'], 'the supply-bearing variant must be remembered per URL');
+  } finally {
+    server.close();
+  }
+});
+
+test('getPrinterAttributes counts a printer-supply answer as supply-bearing (no sweep)', async () => {
+  resetVariantCache();
+  const { server, requests, url } = await startFakeEt2810({ supplyPairOnList: true });
+  try {
+    const attributes = await getPrinterAttributes(url);
+    assert.match(String(attributes['printer-supply']), /level=57/);
+    assert.deepEqual(requests, ['list'], 'a PWG 5100.13 answer must not trigger the sweep');
   } finally {
     server.close();
   }

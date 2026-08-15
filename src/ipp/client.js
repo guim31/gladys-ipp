@@ -38,6 +38,10 @@ export const REQUESTED_ATTRIBUTES = [
   'marker-types',
   'marker-high-levels',
   'marker-low-levels',
+  // The OTHER standard supply announcement (PWG 5100.13): several firmwares
+  // (Epson EcoTank...) send these and never the marker-* attributes.
+  'printer-supply',
+  'printer-supply-description',
 ];
 
 /**
@@ -115,7 +119,7 @@ export function resetVariantCache() {
  * @returns {boolean}
  */
 function hasSupplyAttributes(attributes) {
-  return ['marker-names', 'marker-levels'].some((name) => {
+  return ['marker-names', 'marker-levels', 'printer-supply'].some((name) => {
     const value = attributes[name];
     return value !== undefined && value !== null && !(Array.isArray(value) && value.length === 0);
   });

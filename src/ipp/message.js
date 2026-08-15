@@ -118,6 +118,10 @@ function decodeValue(tag, value) {
     case TAGS.UNKNOWN:
     case TAGS.UNSUPPORTED:
       return null;
+    case TAGS.OCTET_STRING:
+      // The octetStrings the integration reads (printer-supply, PWG 5100.13)
+      // carry readable "key=value;" pairs: decode as text.
+      return value.toString('utf8');
     case TAGS.TEXT_WITHOUT_LANGUAGE:
     case TAGS.NAME_WITHOUT_LANGUAGE:
     case TAGS.KEYWORD:

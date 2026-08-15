@@ -154,3 +154,12 @@ test('probePrinter reports the last error when every candidate fails', async () 
 test('probePrinter rejects an empty target', async () => {
   await assert.rejects(() => probePrinter(''), /Empty printer target/);
 });
+
+test('decodeMessage decodes octetStrings (printer-supply) as text', () => {
+  const supply = 'index=1;type=ink;maxcapacity=100;level=57;colorantname=black;';
+  const buffer = buildIppResponse({
+    printerAttrs: [attr('printer-supply', [{ tag: TAGS.OCTET_STRING, value: supply }])],
+  });
+  const attrs = printerAttributes(decodeMessage(buffer));
+  assert.equal(attrs['printer-supply'], supply);
+});
