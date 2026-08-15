@@ -99,6 +99,43 @@ function supplyRows(attributes) {
 }
 
 /**
+ * Turn raw supply rows into the integration's marker model, whatever their
+ * source (IPP marker-*, IPP printer-supply, or the SNMP Printer MIB).
+ * @param {Array<{ name?: string, color?: string|null, type?: string|null,
+ *                 level?: unknown, high?: unknown }>} rows
+ * @returns {Array<{ key: string, name: string, color: string|null,
+ *                   type: string|null, percent: number|null, rawLevel: number|null }>}
+ */
+export function buildMarkers(rows) {
+  const usedKeys = new Set();
+  return rows.map((row, i) => {
+    const name = row.name != null && row.name !== '' ? String(row.name) : `Cartridge ${i + 1}`;
+    // Feature keys derive from the supply NAME (stable across reboots and
+    // list reorderings), deduplicated by suffix when two supplies share one.
+    let key = slugify(name);
+    let suffix = 2;
+    while (usedKeys.has(key)) {
+      key = `${slugify(name)}-${suffix}`;
+      suffix += 1;
+    }
+    usedKeys.add(key);
+    const rawLevel = Number(row.level);
+    return {
+      key,
+      name,
+      color: row.color ?? null,
+      type: row.type ?? null,
+      percent: markerPercent(row.level, row.high),
+      // Raw level value, kept for diagnostics: when percent is null, it
+      // tells WHY (-1 not reported, -2 unknown, -3 "some left" — the IPP
+      // sentinels, shared with the Printer MIB — or null when the value is
+      // simply missing).
+      rawLevel: Number.isFinite(rawLevel) ? rawLevel : null,
+    };
+  });
+}
+
+/**
  * Clean up printer-state-reasons: drop 'none', strip the severity suffix
  * ('media-empty-warning' -> 'media-empty'), dedupe.
  * @param {unknown} reasons
@@ -165,31 +202,7 @@ export function parsePrinter(attributes) {
     rows = supplyRows(attributes);
   }
 
-  const usedKeys = new Set();
-  const markers = rows.map((row, i) => {
-    const name = row.name !== '' ? row.name : `Cartridge ${i + 1}`;
-    // Feature keys derive from the supply NAME (stable across reboots and
-    // list reorderings), deduplicated by suffix when two supplies share one.
-    let key = slugify(name);
-    let suffix = 2;
-    while (usedKeys.has(key)) {
-      key = `${slugify(name)}-${suffix}`;
-      suffix += 1;
-    }
-    usedKeys.add(key);
-    const rawLevel = Number(row.level);
-    return {
-      key,
-      name,
-      color: row.color,
-      type: row.type,
-      percent: markerPercent(row.level, row.high),
-      // Raw level value, kept for diagnostics: when percent is null, it
-      // tells WHY (-1 not reported, -2 unknown, -3 "some left" — the IPP
-      // sentinels — or null when the value is simply missing).
-      rawLevel: Number.isFinite(rawLevel) ? rawLevel : null,
-    };
-  });
+  const markers = buildMarkers(rows);
 
   const text = (value) => (typeof value === 'string' && value.trim() !== '' ? value.trim() : null);
 

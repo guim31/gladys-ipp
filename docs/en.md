@@ -66,9 +66,12 @@ device only exposes its state.
 - **Printer not discovered**: check that it answers IPP with the "Test a
   printer" action. If the test fails, check that port 631 is open and that
   IPP/AirPrint is enabled in the printer settings.
-- **No ink levels**: the printer does not publish the `marker-levels`
-  attributes over IPP. That is a firmware limitation, not an integration
-  one.
+- **No ink levels**: run "Test a printer", the message tells you which case
+  you are in. "no supply announced, over IPP nor SNMP" means the printer
+  keeps its levels for its own app: a firmware limitation, not an
+  integration one. If SNMP is disabled in the printer network settings,
+  turning it back on is sometimes enough for the cartridges to show up (the
+  community name must stay `public`).
 - **A single cartridge shows "unknown" (often the black one, on HP)**: if
   that cartridge is refilled or third-party, this is by HP design — the
   firmware refuses to estimate the level of non-genuine cartridges (it shows

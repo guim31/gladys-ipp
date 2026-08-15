@@ -27,8 +27,8 @@
         "fr": "Fonctionnement"
       },
       "description": {
-        "en": "Printers advertising IPP (any AirPrint-capable printer) are discovered automatically on your network. You can also list printers manually below — useful when mDNS does not reach them. Each printer exposes one sensor per ink or toner cartridge, plus its state.",
-        "fr": "Les imprimantes annonçant IPP (toute imprimante compatible AirPrint) sont découvertes automatiquement sur votre réseau. Vous pouvez aussi les déclarer manuellement ci-dessous — utile quand le mDNS ne les atteint pas. Chaque imprimante expose un capteur par cartouche d'encre ou de toner, plus son état."
+        "en": "Printers advertising IPP (any AirPrint-capable printer) are discovered automatically on your network. You can also list printers manually below — useful when mDNS does not reach them. Each printer exposes one sensor per ink or toner cartridge, plus its state. Printers that announce no level over IPP are asked over SNMP instead, the way CUPS reads them.",
+        "fr": "Les imprimantes annonçant IPP (toute imprimante compatible AirPrint) sont découvertes automatiquement sur votre réseau. Vous pouvez aussi les déclarer manuellement ci-dessous — utile quand le mDNS ne les atteint pas. Chaque imprimante expose un capteur par cartouche d'encre ou de toner, plus son état. Les imprimantes qui n'annoncent aucun niveau en IPP sont interrogées en SNMP, comme le fait CUPS."
       },
       "links": [
         {

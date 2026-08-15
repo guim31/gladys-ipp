@@ -7,6 +7,7 @@
 import { createLogger } from '@gladysassistant/integration-sdk';
 import { probePrinter } from './ipp/client.js';
 import { parsePrinter } from './printer.js';
+import { withFallbackSupplies } from './supplies.js';
 
 const logger = createLogger({ name: 'actions' });
 
@@ -63,8 +64,8 @@ export function noSupplyDiagnostic(attributes) {
     };
   }
   return {
-    en: 'no supply attribute in the IPP answer',
-    fr: 'aucun attribut de consommable dans la réponse IPP',
+    en: 'no supply announced, over IPP nor SNMP',
+    fr: 'aucun consommable annoncé, ni en IPP ni en SNMP',
   };
 }
 
@@ -78,22 +79,29 @@ export const ACTIONS = {
     const target = String(fields?.host ?? '').trim();
     logger.info(`Action test_printer <- "${target}"`);
     const { url, attributes } = await probePrinter(target);
-    const printer = parsePrinter(attributes);
+    // Same path as a real poll, SNMP fallback included: what the button
+    // reports is exactly what the device will get.
+    const printer = await withFallbackSupplies(parsePrinter(attributes), url, {
+      ignoreBackoff: true,
+    });
 
     const model = printer.makeAndModel ?? printer.name ?? url;
     const suppliesEn = formatSupplies(printer, 'en');
     const suppliesFr = formatSupplies(printer, 'fr');
+    // Naming the source matters for support: "via SNMP" tells the user their
+    // printer needs SNMP reachable, and tells us which path answered.
+    const via = printer.supplySource === 'snmp' ? ' (via SNMP)' : '';
 
     const noSupply = noSupplyDiagnostic(attributes);
 
     return {
       en:
         `Printer OK: ${model} — state "${printer.stateText}"` +
-        (suppliesEn ? ` — ${suppliesEn}` : ` — ${noSupply.en}`) +
+        (suppliesEn ? ` — ${suppliesEn}${via}` : ` — ${noSupply.en}`) +
         ` (${url})`,
       fr:
         `Imprimante OK : ${model} — état « ${printer.stateText} »` +
-        (suppliesFr ? ` — ${suppliesFr}` : ` — ${noSupply.fr}`) +
+        (suppliesFr ? ` — ${suppliesFr}${via}` : ` — ${noSupply.fr}`) +
         ` (${url})`,
     };
   },

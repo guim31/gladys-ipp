@@ -32,8 +32,11 @@ majorité des imprimantes vendues depuis ~2012 : HP, Epson, Canon, Brother,
 Lexmark…). L'imprimante doit être sur le même réseau que Gladys, avec IPP
 activé (il l'est par défaut ; certains menus l'appellent « AirPrint »).
 
-Certaines imprimantes n'annoncent pas leurs niveaux d'encre via IPP : dans ce
-cas l'appareil n'expose que son état.
+Les imprimantes annoncent leurs niveaux d'encre de trois façons différentes
+selon les marques et les firmwares : l'intégration les essaie toutes les
+trois (les attributs IPP `marker-*`, la variante `printer-supply`, puis le
+protocole SNMP — celui qu'utilise CUPS — quand l'IPP n'annonce rien). Si
+aucune ne répond, l'appareil n'expose que son état.
 
 ## Configuration
 
@@ -72,9 +75,12 @@ cas l'appareil n'expose que son état.
   l'action « Tester une imprimante ». Si le test échoue, vérifiez que le
   port 631 est ouvert et qu'IPP/AirPrint est activé dans les réglages de
   l'imprimante.
-- **Pas de niveaux d'encre** : l'imprimante ne publie pas les attributs
-  `marker-levels` via IPP. C'est une limite du firmware, pas de
-  l'intégration.
+- **Pas de niveaux d'encre** : lancez « Tester une imprimante », le message
+  précise le cas. « aucun consommable annoncé, ni en IPP ni en SNMP » signifie
+  que l'imprimante garde ses niveaux pour son application maison : c'est une
+  limite du firmware, pas de l'intégration. Si le SNMP est désactivé dans les
+  réglages réseau de l'imprimante, le réactiver suffit parfois à faire
+  apparaître les cartouches (le nom de communauté doit rester `public`).
 - **Une seule cartouche affiche « inconnu » (souvent le noir, sur HP)** : si
   cette cartouche est rechargée ou compatible, c'est voulu par HP — le
   firmware refuse d'estimer le niveau des cartouches non authentiques (il

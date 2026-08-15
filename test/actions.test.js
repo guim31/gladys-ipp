@@ -46,8 +46,8 @@ test('noSupplyDiagnostic lists supply-ish attributes the parser missed', () => {
   assert.match(fr, /attributs non exploités : epson-ink-info/);
 });
 
-test('noSupplyDiagnostic states when the IPP answer has no supply at all', () => {
+test('noSupplyDiagnostic states when neither IPP nor SNMP announced anything', () => {
   const { en, fr } = noSupplyDiagnostic({ 'printer-state': 3, 'printer-name': 'X' });
-  assert.equal(en, 'no supply attribute in the IPP answer');
-  assert.equal(fr, 'aucun attribut de consommable dans la réponse IPP');
+  assert.equal(en, 'no supply announced, over IPP nor SNMP');
+  assert.equal(fr, 'aucun consommable annoncé, ni en IPP ni en SNMP');
 });

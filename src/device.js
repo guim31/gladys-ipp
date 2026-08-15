@@ -19,6 +19,7 @@ import {
 import { getPrinterAttributes } from './ipp/client.js';
 import { displayMarkerName, displayStateName } from './naming.js';
 import { parsePrinter, slugify } from './printer.js';
+import { withFallbackSupplies } from './supplies.js';
 
 export const DEVICE_TYPE = 'printer';
 export const PRINTER_URL_PARAM = 'PRINTER_URL';
@@ -189,18 +190,23 @@ export function isPrinterDevice(device) {
  * @param {object} gladys SDK instance
  * @param {object} device the Gladys device (with params) handed to onPoll
  * @param {{ poll_frequency: number }} config
- * @param {{ fetchAttributes?: typeof getPrinterAttributes, now?: () => number, force?: boolean }} [deps] test seam
+ * @param {{ fetchAttributes?: typeof getPrinterAttributes, now?: () => number,
+ *           force?: boolean, fallbackSupplies?: typeof withFallbackSupplies }} [deps] test seam
  */
 export async function pollPrinter(gladys, device, config, deps = {}) {
-  const { fetchAttributes = getPrinterAttributes, now = Date.now, force = false } = deps;
+  const {
+    fetchAttributes = getPrinterAttributes,
+    now = Date.now,
+    force = false,
+    fallbackSupplies = withFallbackSupplies,
+  } = deps;
   const url = (device.params ?? []).find((param) => param.name === PRINTER_URL_PARAM)?.value;
   if (!url) {
     throw new Error(`Device ${device.external_id} has no ${PRINTER_URL_PARAM} param`);
   }
 
   const attributes = await fetchAttributes(url);
-  const printer = parsePrinter(attributes);
-  const probed = { printer, url };
+  let printer = parsePrinter(attributes);
 
   const lastLevels = lastLevelsAt.get(device.external_id);
   const levelsIntervalMs = Math.max(config.poll_frequency, 60) * 1000;
@@ -213,6 +219,13 @@ export async function pollPrinter(gladys, device, config, deps = {}) {
     );
     return;
   }
+
+  if (withLevels) {
+    // Only worth asking when the levels are actually due: the state samples
+    // every 15 s and must stay a single IPP request.
+    printer = await fallbackSupplies(printer, url);
+  }
+  const probed = { printer, url };
 
   if (withLevels) {
     const rebuilt = buildPrinterDevice(gladys, probed, config);

@@ -43,8 +43,12 @@ export function displayMarkerName(marker, lang) {
   const haystack = `${marker.name} ${marker.type ?? ''}`.toLowerCase();
   const color = COLORS.find((c) => c.match.test(haystack));
 
-  // Waste containers have no color but a very recognizable name.
-  if (/waste/.test(haystack)) {
+  // Waste containers have no color but a very recognizable name. Inkjets
+  // call theirs a maintenance box, laser printers a waste toner bottle.
+  if (/waste|maintenance[ -]?box/.test(haystack)) {
+    if (/ink|encre|maintenance[ -]?box/.test(haystack)) {
+      return lang === 'fr' ? "Bac de récupération d'encre" : 'Waste ink container';
+    }
     return lang === 'fr' ? 'Récupérateur de toner' : 'Waste container';
   }
   if (!color) {

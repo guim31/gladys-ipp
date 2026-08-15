@@ -11,6 +11,7 @@ import { createLogger } from '@gladysassistant/integration-sdk';
 import { probePrinter } from './ipp/client.js';
 import { parsePrinterHosts } from './config.js';
 import { parsePrinter } from './printer.js';
+import { withFallbackSupplies } from './supplies.js';
 import { platformIdFor } from './device.js';
 
 const logger = createLogger({ name: 'discovery' });
@@ -56,12 +57,17 @@ export function mdnsCandidateUrl(entry) {
  * the manual list keeps working.
  * @param {object} gladys SDK instance
  * @param {{ printer_hosts: string }} config
- * @param {{ probe?: typeof probePrinter, scanTimeoutSeconds?: number }} [deps] test seam
+ * @param {{ probe?: typeof probePrinter, scanTimeoutSeconds?: number,
+ *           fallbackSupplies?: typeof withFallbackSupplies }} [deps] test seam
  * @returns {Promise<{ printers: Array<{ printer: object, url: string, target: string }>,
  *                     errors: Array<{ target: string, error: Error }> }>}
  */
 export async function discoverPrinters(gladys, config, deps = {}) {
-  const { probe = probePrinter, scanTimeoutSeconds = 5 } = deps;
+  const {
+    probe = probePrinter,
+    scanTimeoutSeconds = 5,
+    fallbackSupplies = withFallbackSupplies,
+  } = deps;
 
   const targets = parsePrinterHosts(config.printer_hosts);
 
@@ -104,7 +110,9 @@ export async function discoverPrinters(gladys, config, deps = {}) {
   for (const target of targets) {
     try {
       const { url, attributes } = await probe(target);
-      const printer = parsePrinter(attributes);
+      // A printer announcing no supply over IPP gets one SNMP chance here, so
+      // its cartridges exist as features from the very first discovery.
+      const printer = await fallbackSupplies(parsePrinter(attributes), url);
       const platformId = platformIdFor(printer, url);
       if (seenIds.has(platformId)) {
         continue; // same printer reached through two targets (manual + mDNS)

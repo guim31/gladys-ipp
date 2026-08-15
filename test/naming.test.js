@@ -46,6 +46,16 @@ test('waste containers and unrecognized names', () => {
   );
 });
 
+test('inkjet waste containers are not called toner containers', () => {
+  // Typical of the SNMP Printer MIB on an EcoTank: "Maintenance Box" with
+  // supply type wasteInk.
+  assert.equal(
+    displayMarkerName(marker('Maintenance Box', 'waste-ink'), 'fr'),
+    "Bac de récupération d'encre",
+  );
+  assert.equal(displayMarkerName(marker('Waste Ink', 'waste-ink'), 'en'), 'Waste ink container');
+});
+
 test('english mode normalizes the raw names', () => {
   assert.equal(displayMarkerName(marker('BLACK CARTRIDGE HP 305'), 'en'), 'Black ink');
   assert.equal(displayMarkerName(marker('Cyan Toner', 'toner'), 'en'), 'Cyan toner');

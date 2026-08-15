@@ -20,6 +20,7 @@ import { parsePrinter } from '../src/printer.js';
 import { normalizeConfig } from '../src/config.js';
 import { createFakeGladys } from './helpers/fakeGladys.js';
 import { COLOR_INKJET_ATTRIBUTES } from './helpers/ippFixtures.js';
+import { buildMarkers } from '../src/printer.js';
 
 const config = normalizeConfig();
 const URL_UNDER_TEST = 'http://192.168.1.20:631/ipp/print';
@@ -405,4 +406,74 @@ test('discoverPrinters collects per-target errors without failing the scan', asy
   assert.equal(printers.length, 1);
   assert.equal(errors.length, 1);
   assert.equal(errors[0].target, '192.168.1.99');
+});
+
+// --- SNMP fallback wiring ----------------------------------------------------
+
+test('pollPrinter only asks SNMP when the levels are due, never on a state sample', async () => {
+  resetPollThrottle();
+  const gladys = createFakeGladys();
+  const stateOnly = { 'printer-name': 'EPSON ET-2810', 'printer-state': 3 };
+  const snmpSupplies = [{ name: 'Black ink', color: null, type: 'ink', level: 76, high: 100 }];
+
+  let snmpCalls = 0;
+  let clock = 1_000_000;
+  let attributes = stateOnly;
+  const deps = {
+    fetchAttributes: async () => attributes,
+    now: () => clock,
+    fallbackSupplies: async (printer, url) => {
+      snmpCalls += 1;
+      assert.equal(url, URL_UNDER_TEST);
+      return { ...printer, markers: buildMarkers(snmpSupplies), supplySource: 'snmp' };
+    },
+  };
+  const device = buildPrinterDevice(gladys, probedInkjet(), config);
+
+  await pollPrinter(gladys, device, config, deps); // first poll: levels due
+  assert.equal(snmpCalls, 1);
+  assert.equal(
+    gladys.published.filter((p) => p.state === 76).length,
+    1,
+    'the SNMP level must reach Gladys like an IPP one',
+  );
+
+  clock += 15_000;
+  attributes = { ...stateOnly, 'printer-state': 4 }; // state change, levels not due
+  gladys.published.length = 0;
+  await pollPrinter(gladys, device, config, deps);
+  assert.equal(snmpCalls, 1, 'a state sample must not generate SNMP traffic');
+  assert.equal(gladys.published.length, 1);
+
+  clock += config.poll_frequency * 1000; // levels due again
+  await pollPrinter(gladys, device, config, deps);
+  assert.equal(snmpCalls, 2);
+});
+
+test('pollPrinter publishes the device when SNMP reveals supplies IPP never announced', async () => {
+  resetPollThrottle();
+  const gladys = createFakeGladys();
+  // A device created while the printer announced nothing: state feature only.
+  const device = buildPrinterDevice(
+    gladys,
+    { printer: { ...probedInkjet().printer, markers: [] }, url: URL_UNDER_TEST },
+    config,
+  );
+  assert.equal(device.features.length, 1);
+
+  await pollPrinter(gladys, device, config, {
+    fetchAttributes: async () => ({ 'printer-state': 3 }),
+    fallbackSupplies: async (printer) => ({
+      ...printer,
+      markers: buildMarkers([{ name: 'Black ink', type: 'ink', level: 76, high: 100 }]),
+      supplySource: 'snmp',
+    }),
+  });
+
+  assert.equal(
+    gladys.discoveredDevices.length,
+    1,
+    'the new cartridge feature must be published before its state',
+  );
+  assert.equal(gladys.discoveredDevices[0].features.length, 2);
 });

@@ -17,8 +17,15 @@ Built from the official
 - **Manual list**: IPs, hostnames or `ipp://` URIs typed in the
   configuration, for printers mDNS cannot reach.
 - **One device per printer**, with one `LEVEL_SENSOR` feature (0-100 %) per
-  ink/toner supply (`marker-*` IPP attributes) and a `TEXT` feature carrying
-  the printer state (`idle`, `printing`, `stopped (media-empty)`, …).
+  ink/toner supply and a `TEXT` feature carrying the printer state (`idle`,
+  `printing`, `stopped (media-empty)`, …).
+- **Three supply sources**, tried in that order, because firmwares disagree
+  on where levels live: the `marker-*` IPP attributes, the `printer-supply`
+  pair of PWG 5100.13, and — only when IPP announces nothing at all — the
+  Printer MIB over SNMP (RFC 3805, what CUPS reads). The SNMP query is a
+  unicast to the printer the integration is already talking to, sent only
+  when the levels are due, and a printer that does not answer is left alone
+  for 30 minutes.
 - **Polling** at a configurable interval; the working IPP URL is stored in
   the device params, so polling survives restarts without a re-discovery.
 - **Test a printer** action: probe any host from the Configuration screen and
@@ -34,7 +41,12 @@ Built from the official
 │  │  ├─ constants.js                # IPP tags, operations, printer states
 │  │  ├─ message.js                  # binary IPP encoding/decoding (RFC 8010), pure functions
 │  │  └─ client.js                   # HTTP transport, candidate URLs, probing
+│  ├─ snmp/
+│  │  ├─ ber.js                      # the ASN.1 BER slice SNMP needs, pure functions
+│  │  ├─ client.js                   # SNMPv1 GetNext walk over UDP 161
+│  │  └─ supplies.js                 # Printer MIB (RFC 3805) -> supply rows
 │  ├─ printer.js                     # raw IPP attributes -> printer model (markers, state)
+│  ├─ supplies.js                    # SNMP fallback when IPP announces no supply
 │  ├─ device.js                      # printer model -> Gladys device + states, polling
 │  ├─ discovery.js                   # manual list + mDNS -> probed printers
 │  ├─ actions.js                     # manifest action handlers (test_printer)
@@ -49,6 +61,11 @@ The IPP client is ~200 lines of dependency-free Node: IPP is a binary TLV
 message POSTed over HTTP (`application/ipp`, port 631). The integration sends
 a single operation, `Get-Printer-Attributes`, and reads the standard
 `marker-names` / `marker-levels` / `printer-state` attributes.
+
+The SNMP client is the same idea for the fallback: BER is another TLV format,
+and one `GetNextRequest` walk over `prtMarkerSupplies` is all the Printer MIB
+needs — no dependency either. Both are tested against real local servers
+(HTTP, HTTPS and UDP), not mocks.
 
 ## Run it locally
 
