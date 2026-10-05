@@ -69,8 +69,10 @@ widgets attendent le test de Guilhem ou des testeurs du forum.
 - **Publier est un geste de Guilhem** : Actions → Release (patch, minor ou major) construit
   l'image `ghcr.io/guim31/<dépôt>`, monte la version du manifeste et pose le tag. Un correctif
   poussé sur `main` sans Release n'atteint aucune installation : le signaler.
-- Le workflow Release réindente le manifeste sans relancer la CI : passer `npm run format` au
-  commit suivant.
+- Le workflow Release reformate le manifeste avec Prettier, publie l'image et crée la **release
+  GitHub** (notes générées depuis les PR, ou `.github/release-notes/vX.Y.Z.md` s'il existe) : c'est
+  elle que Gladys ouvre par « Voir le changelog de cette version ». Les trois workflows (`ci`,
+  `build`, `release`) sont communs aux intégrations de guim31 : ne pas les modifier dans un seul dépôt.
 - Le dépôt est **public** : aucun secret, aucune adresse ni détail d'infrastructure privée, ni
   ici, ni dans les tests, ni dans les captures.
 
