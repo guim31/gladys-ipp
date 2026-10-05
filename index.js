@@ -251,7 +251,10 @@ gladys.onWidgetAction(WIDGET.PRINTER, async (actionKey, params) => {
   if (actionKey !== PRINTER_ACTION.CHECK) {
     throw new Error(`Unknown widget action: ${actionKey}`);
   }
-  const device = printerDevices.find((candidate) => candidate.external_id === params?.printer);
+  // Through widgetPrinters(): a tap right after a restart must not fail on
+  // a device cache the initialization has not filled yet.
+  const devices = await widgetPrinters();
+  const device = devices.find((candidate) => candidate.external_id === params?.printer);
   if (!device) {
     throw new Error(`Unknown printer: ${params?.printer}`);
   }

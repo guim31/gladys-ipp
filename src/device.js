@@ -50,11 +50,18 @@ const lastStateText = new Map();
 // of the last levels reading (an SNMP-only printer announces none over IPP).
 const printerSnapshots = new Map();
 
+// Poll in flight, per device external_id: the widget "Check" button and the
+// sampling loop may ask for the same printer at the same time, and two
+// concurrent IPP requests (then two publishes) are never worth it — the
+// second caller shares the promise of the first.
+const pollsInFlight = new Map();
+
 /** Reset the poll bookkeeping (tests only). */
 export function resetPollThrottle() {
   lastLevelsAt.clear();
   lastStateText.clear();
   printerSnapshots.clear();
+  pollsInFlight.clear();
 }
 
 /**
@@ -232,7 +239,20 @@ export function isPrinterDevice(device) {
  * @returns {Promise<{ published: boolean, stateChanged: boolean, withLevels: boolean }>}
  *   what this sample did, so the caller can nudge the dashboard widgets
  */
-export async function pollPrinter(gladys, device, config, deps = {}) {
+export function pollPrinter(gladys, device, config, deps = {}) {
+  const inFlight = pollsInFlight.get(device.external_id);
+  if (inFlight) {
+    return inFlight;
+  }
+  const poll = samplePrinter(gladys, device, config, deps).finally(() => {
+    pollsInFlight.delete(device.external_id);
+  });
+  pollsInFlight.set(device.external_id, poll);
+  return poll;
+}
+
+/** The poll itself, see pollPrinter. */
+async function samplePrinter(gladys, device, config, deps) {
   const {
     fetchAttributes = getPrinterAttributes,
     now = Date.now,

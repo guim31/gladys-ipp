@@ -156,7 +156,7 @@
           "required": false
         }
       ],
-      "action_timeout_seconds": 30
+      "action_timeout_seconds": 60
     },
     {
       "key": "supplies",

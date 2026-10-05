@@ -519,3 +519,54 @@ test('pollPrinter keeps the last answer of each printer for the widgets', async 
   resetPollThrottle();
   assert.equal(getPrinterSnapshot(device.external_id), undefined);
 });
+
+test('pollPrinter runs one sample at a time per printer: concurrent callers share it', async () => {
+  resetPollThrottle();
+  const gladys = createFakeGladys();
+  const device = buildPrinterDevice(gladys, probedInkjet(), config);
+  let fetches = 0;
+  let release;
+  const deps = {
+    fetchAttributes: () => {
+      fetches += 1;
+      return new Promise((resolve) => {
+        release = () => resolve(COLOR_INKJET_ATTRIBUTES);
+      });
+    },
+    now: () => 1_000_000,
+  };
+  // The sampling loop and the widget "Check" button, at the same moment.
+  const loop = pollPrinter(gladys, device, config, deps);
+  const button = pollPrinter(gladys, device, config, { ...deps, force: true });
+  assert.equal(fetches, 1, 'the second caller must not send a second IPP request');
+  release();
+  const [first, second] = await Promise.all([loop, button]);
+  assert.deepEqual(first, second);
+  assert.equal(first.published, true);
+  assert.equal(gladys.published.length, 5, 'published once, not twice');
+
+  // Once settled, the next call is a fresh sample again.
+  const next = pollPrinter(gladys, device, config, deps);
+  assert.equal(fetches, 2);
+  release();
+  await next;
+});
+
+test('a failed poll does not pin the printer as in flight', async () => {
+  resetPollThrottle();
+  const gladys = createFakeGladys();
+  const device = buildPrinterDevice(gladys, probedInkjet(), config);
+  await assert.rejects(
+    pollPrinter(gladys, device, config, {
+      fetchAttributes: async () => {
+        throw new Error('unreachable');
+      },
+    }),
+    /unreachable/,
+  );
+  const ok = await pollPrinter(gladys, device, config, {
+    fetchAttributes: async () => COLOR_INKJET_ATTRIBUTES,
+    now: () => 1_000_000,
+  });
+  assert.equal(ok.published, true);
+});
