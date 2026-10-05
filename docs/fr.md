@@ -3,7 +3,7 @@
 Cette intégration surveille vos imprimantes réseau via le protocole standard
 **IPP** (Internet Printing Protocol) — celui qu'utilise AirPrint. Elle
 fonctionne entièrement en local : pas de compte, pas de cloud, pas de clé
-d'API.
+d'API. Elle demande Gladys 5.1 ou plus récent.
 
 ## Ce que vous obtenez
 
@@ -68,6 +68,36 @@ aucune ne répond, l'appareil n'expose que son état.
   `ipp://` : l'intégration l'interroge en direct et affiche le modèle, l'état
   et les niveaux détectés. Le moyen le plus rapide de vérifier une adresse
   avant de l'ajouter à la liste manuelle.
+
+## Widgets du tableau de bord
+
+Avec Gladys 5.1 ou plus récent, l'intégration propose deux widgets dans
+l'éditeur de tableau de bord (catégorie « Imprimantes IPP »).
+
+- **Imprimante** : une imprimante en un coup d'œil — une jauge par
+  consommable (encre, toner, tambour…), l'état (prête, impression, arrêtée
+  avec sa raison), l'heure du dernier relevé et le consommable le plus bas,
+  plus un bouton **Vérifier** qui interroge l'imprimante immédiatement et
+  republie ses valeurs. Réglage : l'imprimante à afficher (laissez vide pour
+  la première ajoutée à Gladys). Les jauges sont liées aux capteurs de
+  l'appareil : elles suivent les niveaux en direct, sans attendre le
+  rafraîchissement du widget. Limites : au plus **5 jauges** (le tableau de
+  bord limite un widget à 8 éléments) ; au-delà, les niveaux les plus bas
+  sont affichés en priorité. Les jauges sont vertes à partir de 25 %, orange
+  en dessous, rouges sous 10 %.
+- **Consommables** : toutes vos imprimantes en une liste, les plus critiques
+  d'abord — pour chacune, l'état et le consommable le plus bas (« Prête ·
+  Noir 12 % »), avec la couleur du niveau (rouge sous 10 %, orange sous
+  25 %) — et le nombre d'imprimantes « à surveiller » (un consommable sous
+  25 %). Aucun réglage. Au plus 10 imprimantes sont listées.
+
+Les deux widgets lisent le dernier relevé fait par l'intégration (toutes les
+15 s pour l'état, à l'intervalle réglé pour les niveaux) : ils n'interrogent
+jamais l'imprimante eux-mêmes, sauf par le bouton **Vérifier**. Tant qu'une
+imprimante n'a pas encore répondu depuis le démarrage de l'intégration, son
+état indique « En attente du premier relevé ». Les noms courts des
+consommables suivent le réglage **Noms des capteurs** (« Noir », « Cyan »,
+« Tambour »… en français ; le nom brut annoncé par l'imprimante sinon).
 
 ## Dépannage
 

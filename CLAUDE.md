@@ -6,11 +6,51 @@ Intégration externe pour [Gladys Assistant](https://gladysassistant.com), bâti
 
 Ce fichier rassemble ce qu'une session de code doit savoir et qui ne se lit pas dans le code : choix de conception, faits vérifiés en réel, pièges déjà payés. Le compléter quand un nouveau piège est découvert.
 
-## État au 02/10/2026
+## État au 05/10/2026
 
-Version 1.0.10 publiée, indexée dans le store. Elle n'a ni widget ni déclencheur de scène : les pièges de la section « Widgets » ne la concernent qu'en cas de passage au SDK 0.14 et à Gladys 5.1.
+Version 1.0.10 publiée, indexée dans le store (SDK 0.12, Gladys ≥ 4.86, sans widget). La branche
+`feat/dashboard-widgets` passe au SDK ^0.14.0 et à `gladys_version >=5.1.0` pour ajouter deux
+widgets de tableau de bord, `printer` et `supplies` : une fois publiée, la version suivante ne
+sera plus proposée aux cœurs plus anciens. Rien n'a encore été vu sur une instance réelle : les
+widgets attendent le test de Guilhem ou des testeurs du forum.
 
-**Aucune note de conception n'a encore été consignée pour ce dépôt** : la lire dans le code, le README et `docs/`, et l'écrire ici au fil des découvertes.
+## Notes de conception
+
+- **Identifiants** : `gladys.externalIds('printer', platformId)` donne
+  `ext:<sélecteur>:printer:<uuid|host-...>` et chaque fonctionnalité `<appareil>:<clé>`, avec
+  `state` et `marker:<slug du nom brut>` comme clés. Les widgets reconstruisent l'id d'une jauge
+  par `${device.external_id}:marker:${marker.key}` (`markerFeatureId`) et ne la **lient** que si
+  l'appareil créé porte cette fonctionnalité ; sinon la jauge est inline (consommable apparu
+  depuis l'ajout, avant « Mettre à jour »).
+- **Cache des relevés** (`rememberPrinterSnapshot` / `getPrinterSnapshot` dans `device.js`) :
+  alimenté par chaque échantillon réussi de `pollPrinter`, publié ou non, avec la date. Un
+  échantillon d'état seul (IPP sans repli SNMP) conserve les consommables du dernier relevé de
+  niveaux : une imprimante SNMP-only n'annonce rien en IPP et perdrait ses jauges sinon. Le rendu
+  d'un widget ne fait **aucune requête** IPP/SNMP ; seul le bouton « Vérifier » interroge
+  (`pollPrinter({ force: true })`), et le cœur recharge le widget à la résolution de l'action.
+- `pollPrinter` renvoie `{ published, stateChanged, withLevels }` : `index.js` envoie
+  `requestWidgetRefresh` aux deux widgets quand un état a changé (les jauges liées suivent les
+  états toutes seules, mais les lignes d'état et la liste des consommables sont en cache côté
+  cœur jusqu'à `ttl_seconds` = 300).
+- **Budget des widgets** : 8 composants au total. Avec l'en-tête, la liste `status` et le bouton,
+  il ne reste que **5 jauges** au widget `printer` (le brief en demandait 6 : impossible sans
+  perdre l'en-tête ou le bouton). Au-delà de 5 niveaux connus, les plus bas passent d'abord.
+- **Couleurs d'état** : `cleanStateReasons` retire la sévérité des `printer-state-reasons`
+  (`-error`, `-warning`, `-report`), on ne peut donc pas distinguer une erreur d'un avertissement
+  au rendu. Règle retenue : `stopped` → `danger`, `printing` → `info`, `idle` sans raison →
+  `success`, `idle` avec raison → `warning`, inconnu → `neutral`. Jamais de style ni de couleur
+  `primary` (invisible en mode sombre), un test le vérifie.
+- **Noms courts** (`shortMarkerName`, `naming.js`) pour les libellés de jauge (≤ 24) : la couleur
+  seule pour une cartouche (« Noir », « Cyan »), la pièce sinon (« Tambour noir », « Four »,
+  « Récupérateur ») ; en mode `printer` le nom brut, débarrassé d'un suffixe de numéro de série
+  et coupé à 24. `displayMarkerName` (noms des fonctionnalités) n'a pas été touché : il nomme
+  encore « Encre noire » un tambour noir, à corriger un jour pour les appareils neufs seulement
+  (les noms sont figés à la création).
+- « Première imprimante créée » (réglage `printer` vide) = la première du cache `printerDevices`,
+  dans l'ordre que renvoie `gladys.getDevices()` ; un cache vide est relu une fois au rendu.
+- Le widget `supplies` n'a pas de réglage ; il liste au plus 10 imprimantes (limite des lignes
+  `status`), les niveaux connus croissants, puis les imprimantes sans niveau, puis celles jamais
+  relevées.
 
 ## Travailler sur ce dépôt
 
@@ -75,7 +115,12 @@ Vérifiés dans le code du cœur ou payés sur une intégration publiée. Ils va
 **Widgets, déclencheurs, actions de scène (SDK ≥ 0.14, Gladys ≥ 5.1)**
 
 - Budget du cœur : **8 composants par widget, dont 2 textes au plus**. Le validateur du SDK le
-  signale ; `validateWidgetContent` est exporté pour les tests.
+  signale ; `validateWidgetContent` est exporté pour les tests. Les 6 tuiles de la grammaire ne
+  tiennent donc jamais avec un en-tête, un `status` et un bouton : compter 5.
+- Une jauge `device_feature` prend les bornes de la fonctionnalité ; sa `color` est figée au
+  rendu (jusqu'à `ttl_seconds`), seule l'aiguille est vivante.
+- `onWidgetGet` reçoit `language` (`fr`, `en`…) mais pas le fuseau : le conteneur a `TZ` du
+  superviseur, `Intl.DateTimeFormat` sans option `timeZone` suffit pour une heure locale.
 - Le cœur **jette un bouton dont la clé d'action est déjà prise** : clés numérotées, ce que fait
   le bouton dans ses paramètres.
 - Le vocabulaire des widgets n'a ni liste ni curseur. Seul un bouton `device_feature` numérique

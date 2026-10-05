@@ -2,7 +2,7 @@
 
 This integration monitors your network printers through the standard **IPP**
 protocol (Internet Printing Protocol) — the one AirPrint uses. It runs fully
-locally: no account, no cloud, no API key.
+locally: no account, no cloud, no API key. It requires Gladys 5.1 or newer.
 
 ## What you get
 
@@ -60,6 +60,33 @@ device only exposes its state.
 - **Test a printer** — type an IP, hostname or `ipp://` URI: the integration
   queries it live and shows the model, state and detected levels. The fastest
   way to check an address before adding it to the manual list.
+
+## Dashboard widgets
+
+With Gladys 5.1 or newer, the integration offers two widgets in the dashboard
+editor (under "IPP Printers").
+
+- **Printer**: one printer at a glance — a gauge per supply (ink, toner,
+  drum…), the state (idle, printing, stopped with its reason), the time of
+  the last reading and the lowest supply, plus a **Check** button that
+  queries the printer right away and re-publishes its values. Setting: the
+  printer to show (leave empty for the first one added to Gladys). The gauges
+  are bound to the device sensors: they follow the levels live, without
+  waiting for the widget refresh. Limits: at most **5 gauges** (the dashboard
+  caps a widget at 8 elements); beyond that, the lowest levels come first.
+  Gauges are green from 25 %, orange below, red under 10 %.
+- **Supplies**: every printer in one list, the most critical first — for
+  each, the state and the lowest supply ("Idle · Black 12 %"), colored by
+  level (red under 10 %, orange under 25 %) — and the number of printers "to
+  watch" (a supply under 25 %). No setting. At most 10 printers are listed.
+
+Both widgets read the last reading made by the integration (every 15 s for
+the state, at the configured interval for the levels): they never query the
+printer themselves, except through the **Check** button. Until a printer has
+answered since the integration started, its state reads "Waiting for the
+first reading". The short supply names follow the **Sensor names** setting
+("Black", "Cyan", "Drum"… in English; the raw name reported by the printer
+otherwise).
 
 ## Troubleshooting
 
