@@ -43,10 +43,47 @@ const lastLevelsAt = new Map();
 // the frequent state sampling does not spam Gladys with identical 'idle'.
 const lastStateText = new Map();
 
+// Last answer of each printer, per device external_id: what the dashboard
+// widgets show (state, levels, time of the reading). Fed by every successful
+// sample, published or not, so a widget never queries a printer itself. The
+// markers only move on a LEVELS sample: a state-only sample keeps the ones
+// of the last levels reading (an SNMP-only printer announces none over IPP).
+const printerSnapshots = new Map();
+
 /** Reset the poll bookkeeping (tests only). */
 export function resetPollThrottle() {
   lastLevelsAt.clear();
   lastStateText.clear();
+  printerSnapshots.clear();
+}
+
+/**
+ * Last known answer of a created printer, or undefined before its first
+ * successful sample.
+ * @param {string} deviceExternalId
+ * @returns {{ state: string, stateReasons: string[], stateText: string,
+ *             markers: Array<object>, at: number }|undefined}
+ */
+export function getPrinterSnapshot(deviceExternalId) {
+  return printerSnapshots.get(deviceExternalId);
+}
+
+/**
+ * Remember the answer of a printer for the widgets.
+ * @param {string} deviceExternalId
+ * @param {{ state: string, stateReasons: string[], stateText: string, markers: Array<object> }} printer
+ * @param {{ withLevels: boolean, at: number }} options `withLevels` tells
+ *   whether the markers of this answer are complete (SNMP fallback included)
+ */
+export function rememberPrinterSnapshot(deviceExternalId, printer, { withLevels, at }) {
+  const previous = printerSnapshots.get(deviceExternalId);
+  printerSnapshots.set(deviceExternalId, {
+    state: printer.state,
+    stateReasons: printer.stateReasons,
+    stateText: printer.stateText,
+    markers: withLevels || !previous ? printer.markers : previous.markers,
+    at,
+  });
 }
 
 const logger = createLogger({ name: 'printer-device' });
@@ -192,6 +229,8 @@ export function isPrinterDevice(device) {
  * @param {{ poll_frequency: number }} config
  * @param {{ fetchAttributes?: typeof getPrinterAttributes, now?: () => number,
  *           force?: boolean, fallbackSupplies?: typeof withFallbackSupplies }} [deps] test seam
+ * @returns {Promise<{ published: boolean, stateChanged: boolean, withLevels: boolean }>}
+ *   what this sample did, so the caller can nudge the dashboard widgets
  */
 export async function pollPrinter(gladys, device, config, deps = {}) {
   const {
@@ -217,7 +256,9 @@ export async function pollPrinter(gladys, device, config, deps = {}) {
     logger.debug(
       `Poll ${device.external_id}: "${printer.stateText}" unchanged, nothing to publish`,
     );
-    return;
+    // The printer did answer: the widgets' "last reading" moves anyway.
+    rememberPrinterSnapshot(device.external_id, printer, { withLevels: false, at: now() });
+    return { published: false, stateChanged: false, withLevels: false };
   }
 
   if (withLevels) {
@@ -226,6 +267,7 @@ export async function pollPrinter(gladys, device, config, deps = {}) {
     printer = await fallbackSupplies(printer, url);
   }
   const probed = { printer, url };
+  rememberPrinterSnapshot(device.external_id, printer, { withLevels, at: now() });
 
   if (withLevels) {
     const rebuilt = buildPrinterDevice(gladys, probed, config);
@@ -253,4 +295,5 @@ export async function pollPrinter(gladys, device, config, deps = {}) {
   }
   await gladys.publishStates(states);
   lastStateText.set(device.external_id, printer.stateText);
+  return { published: true, stateChanged, withLevels };
 }

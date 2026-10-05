@@ -9,6 +9,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { ACTIONS } from '../src/actions.js';
 import { DEFAULT_CONFIG } from '../src/config.js';
+import { WIDGET } from '../src/widgets.js';
 
 const manifest = JSON.parse(
   await readFile(new URL('../gladys-assistant-integration.json', import.meta.url), 'utf8'),
@@ -106,4 +107,57 @@ test('the manifest version matches package.json', async () => {
     manifest.docker_image.endsWith(`:${manifest.version}`),
     'docker_image tag must match the manifest version',
   );
+});
+
+// --- Dashboard widgets --------------------------------------------------------
+
+const indexSource = await readFile(new URL('../index.js', import.meta.url), 'utf8');
+
+test('every declared widget has a handler, and every handler a declaration', () => {
+  assert.deepEqual(
+    manifest.widgets.map((w) => w.key).sort(),
+    Object.values(WIDGET).sort(),
+    'manifest widgets and WIDGET constants must match',
+  );
+  for (const [name, key] of Object.entries(WIDGET)) {
+    assert.ok(indexSource.includes(`onWidgetGet(WIDGET.${name}`), `widget "${key}" has no handler`);
+  }
+});
+
+test('widget declarations fit the store and core constraints', () => {
+  assert.match(manifest.gladys_version, />=\s*5\.1\.0/, 'widgets need Gladys 5.1');
+  assert.ok(manifest.widgets.length >= 1 && manifest.widgets.length <= 5);
+  for (const widget of manifest.widgets) {
+    assert.match(widget.key, /^[a-z0-9_]{2,32}$/);
+    for (const lang of ['en', 'fr']) {
+      const label = widget.label[lang];
+      assert.ok(label.length >= 3 && label.length <= 30, `label.${lang} of "${widget.key}"`);
+      const description = widget.description?.[lang] ?? '';
+      assert.ok(description.length <= 100, `description.${lang} of "${widget.key}"`);
+    }
+    assert.match(widget.icon, /^[a-z0-9-]{1,40}$/);
+    for (const setting of widget.settings ?? []) {
+      assert.ok(['string', 'number', 'boolean', 'select', 'section'].includes(setting.type));
+      if (setting.source !== undefined) {
+        assert.equal(setting.source, 'devices', 'the only dynamic source is the device list');
+      }
+      assert.ok(setting.label?.en && setting.label?.fr, `setting "${setting.key}" labels`);
+    }
+  }
+});
+
+test('the printer widget declares its button timeout and its device setting', () => {
+  const printer = manifest.widgets.find((w) => w.key === WIDGET.PRINTER);
+  assert.ok(printer.action_timeout_seconds >= 5 && printer.action_timeout_seconds <= 120);
+  assert.ok(
+    indexSource.includes(`onWidgetAction(WIDGET.PRINTER`),
+    'the check button needs a handler',
+  );
+  const setting = printer.settings.find((s) => s.key === 'printer');
+  assert.equal(setting.type, 'select');
+  assert.equal(setting.source, 'devices');
+  assert.equal(setting.required, false, 'empty = the first printer');
+  const supplies = manifest.widgets.find((w) => w.key === WIDGET.SUPPLIES);
+  assert.equal(supplies.settings, undefined);
+  assert.equal(supplies.action_timeout_seconds, undefined, 'no button, no timeout');
 });

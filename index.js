@@ -21,10 +21,18 @@ import { discoverPrinters } from './src/discovery.js';
 import {
   buildPrinterDevice,
   buildPrinterStates,
+  getPrinterSnapshot,
   isPrinterDevice,
   pollPrinter,
 } from './src/device.js';
 import { ACTIONS } from './src/actions.js';
+import {
+  WIDGET,
+  PRINTER_ACTION,
+  buildPrinterContent,
+  buildSuppliesContent,
+  printerSummary,
+} from './src/widgets.js';
 
 const gladys = new GladysIntegration();
 
@@ -98,15 +106,38 @@ async function refreshCreatedPrinters({ force = false } = {}) {
     return 0;
   }
   let refreshed = 0;
+  let changed = false;
   for (const device of printerDevices) {
     try {
-      await pollPrinter(gladys, device, config, { force });
+      const result = await pollPrinter(gladys, device, config, { force });
       refreshed += 1;
+      changed = changed || result.stateChanged;
     } catch (err) {
       logger.error(`Refresh failed for ${device.external_id}: ${err.message}`);
     }
   }
+  if (changed) {
+    // The gauges are bound to the level features and follow the states on
+    // their own; the state rows and the supplies list are cached by the
+    // core until ttl_seconds: a change of state is worth a nudge.
+    nudgeWidgets();
+  }
   return refreshed;
+}
+
+/**
+ * Ask the core to re-pull both widgets now. Fire-and-forget, rate-limited
+ * core-side (1 per 10 s per widget) and dropped while disconnected: never
+ * worth failing a poll for.
+ */
+function nudgeWidgets() {
+  for (const key of Object.values(WIDGET)) {
+    try {
+      gladys.requestWidgetRefresh(key);
+    } catch (err) {
+      logger.debug(`Widget refresh not requested for ${key}: ${err.message}`);
+    }
+  }
 }
 
 function stopRefreshLoop() {
@@ -145,6 +176,7 @@ gladys.onDeviceCreated(async (device) => {
   logger.info(`onDeviceCreated -> first refresh of ${device.external_id}`);
   await pollPrinter(gladys, device, config, { force: true });
   await reloadPrinterDevices();
+  nudgeWidgets();
 });
 
 // Keep the sampling-loop cache honest when devices change outside our flow.
@@ -166,6 +198,77 @@ gladys.onPoll(async (device) => {
 for (const [actionKey, handler] of Object.entries(ACTIONS)) {
   gladys.onAction(actionKey, (fields) => handler(gladys, { fields, config }));
 }
+
+// --- Dashboard widgets (Gladys 5.1+) ------------------------------------------
+// The content is built from the device cache and the last answer of each
+// printer kept by pollPrinter: rendering never queries a printer.
+
+/**
+ * The created printers, for the widgets. The cache is normally warm; an
+ * empty one is re-read once (the core may ask for a widget before the
+ * post-connection initialization filled it).
+ * @returns {Promise<object[]>}
+ */
+async function widgetPrinters() {
+  if (printerDevices.length === 0) {
+    await reloadPrinterDevices().catch((err) => {
+      logger.warn(`Device cache not refreshed for the widget: ${err.message}`);
+    });
+  }
+  return printerDevices;
+}
+
+gladys.onWidgetGet(WIDGET.PRINTER, async ({ settings, language }) => {
+  const devices = await widgetPrinters();
+  const wanted = typeof settings?.printer === 'string' && settings.printer !== '';
+  const device = wanted
+    ? devices.find((candidate) => candidate.external_id === settings.printer)
+    : devices[0];
+  return buildPrinterContent({
+    device: device ?? null,
+    snapshot: device ? getPrinterSnapshot(device.external_id) : undefined,
+    language,
+    featureNames: config.feature_names,
+    missing: wanted && !device && devices.length > 0,
+  });
+});
+
+gladys.onWidgetGet(WIDGET.SUPPLIES, async ({ language }) => {
+  const devices = await widgetPrinters();
+  return buildSuppliesContent({
+    printers: devices.map((device) => ({
+      device,
+      snapshot: getPrinterSnapshot(device.external_id),
+    })),
+    language,
+    featureNames: config.feature_names,
+  });
+});
+
+// "Check": query this printer now and publish everything. The core reloads
+// the widget as soon as the action resolves; the toast sums up the answer.
+gladys.onWidgetAction(WIDGET.PRINTER, async (actionKey, params) => {
+  if (actionKey !== PRINTER_ACTION.CHECK) {
+    throw new Error(`Unknown widget action: ${actionKey}`);
+  }
+  const device = printerDevices.find((candidate) => candidate.external_id === params?.printer);
+  if (!device) {
+    throw new Error(`Unknown printer: ${params?.printer}`);
+  }
+  await pollPrinter(gladys, device, config, { force: true });
+  // The core reloads THIS widget when the action resolves; the supplies
+  // widget shows the same reading and needs a nudge of its own.
+  try {
+    gladys.requestWidgetRefresh(WIDGET.SUPPLIES);
+  } catch (err) {
+    logger.debug(`Widget refresh not requested: ${err.message}`);
+  }
+  const snapshot = getPrinterSnapshot(device.external_id);
+  return {
+    en: `${device.name}: ${printerSummary(snapshot, 'en', config.feature_names).text}`,
+    fr: `${device.name} : ${printerSummary(snapshot, 'fr', config.feature_names).text}`,
+  };
+});
 
 // --- Configuration updated by the user ---------------------------------------
 gladys.onConfigUpdated(async (newConfig) => {

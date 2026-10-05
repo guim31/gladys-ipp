@@ -76,3 +76,68 @@ export function displayMarkerName(marker, lang) {
 export function displayStateName(lang) {
   return lang === 'fr' ? 'État' : 'State';
 }
+
+// Short color names for the dashboard widgets (a gauge label holds 24
+// characters): the color alone, the kind only when it is not a cartridge.
+const SHORT_COLORS = {
+  'Photo black': { en: 'Photo black', fr: 'Noir photo' },
+  'Matte black': { en: 'Matte black', fr: 'Noir mat' },
+  'Light cyan': { en: 'Light cyan', fr: 'Cyan clair' },
+  'Light magenta': { en: 'Light magenta', fr: 'Magenta clair' },
+  Black: { en: 'Black', fr: 'Noir' },
+  Cyan: { en: 'Cyan', fr: 'Cyan' },
+  Magenta: { en: 'Magenta', fr: 'Magenta' },
+  Yellow: { en: 'Yellow', fr: 'Jaune' },
+  Gray: { en: 'Gray', fr: 'Gris' },
+  'Tri-color': { en: 'Tri-color', fr: 'Trois couleurs' },
+};
+
+/**
+ * Short display name of a supply for a widget tile (≤ 24 characters): the
+ * color alone for an ink or toner cartridge ("Noir", "Cyan"), the part for
+ * the others ("Tambour", "Four", "Récupérateur"). 'printer' keeps the raw
+ * name, shortened. Never empty.
+ * @param {{ name: string, type: string|null }} marker parsed marker
+ * @param {'printer'|'fr'|'en'} lang language of the feature names
+ * @returns {string}
+ */
+export function shortMarkerName(marker, lang) {
+  const raw = String(marker.name ?? '').trim() || 'Cartridge';
+  if (lang !== 'fr' && lang !== 'en') {
+    return fitLabel(raw);
+  }
+  const haystack = `${raw} ${marker.type ?? ''}`.toLowerCase();
+  const color = COLORS.find((c) => c.match.test(haystack));
+  const colorName = color ? SHORT_COLORS[color.en][lang] : null;
+
+  if (/waste|maintenance[ -]?box/.test(haystack)) {
+    return lang === 'fr' ? 'Récupérateur' : 'Waste';
+  }
+  const part = PARTS.find((p) => p.match.test(haystack));
+  if (part) {
+    if (!colorName) {
+      return part[lang];
+    }
+    return lang === 'fr' ? `${part.fr} ${colorName.toLowerCase()}` : `${colorName} ${part.en}`;
+  }
+  return colorName ?? fitLabel(raw);
+}
+
+// Printer parts that are not cartridges but do report a level over IPP/SNMP.
+const PARTS = [
+  { match: /drum|tambour|opc|imaging[ -]?unit/, en: 'Drum', fr: 'Tambour' },
+  { match: /fuser|fixing|four/, en: 'Fuser', fr: 'Four' },
+  { match: /transfer|belt|courroie/, en: 'Transfer', fr: 'Transfert' },
+  { match: /roller|rouleau/, en: 'Roller', fr: 'Rouleau' },
+];
+
+/**
+ * Shorten a raw supply name to a widget label: drop a serial-number tail
+ * ("Black Toner_S/N_:CRUM-..." -> "Black Toner"), then cut at 24 characters.
+ * @param {string} name
+ * @returns {string}
+ */
+function fitLabel(name) {
+  const cleaned = name.replace(/[_ ]*s\/n.*$/i, '').trim() || name;
+  return cleaned.length <= 24 ? cleaned : `${cleaned.slice(0, 23)}…`;
+}

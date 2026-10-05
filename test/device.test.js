@@ -12,6 +12,7 @@ import {
   isPrinterDevice,
   platformIdFor,
   pollPrinter,
+  getPrinterSnapshot,
   PRINTER_URL_PARAM,
   resetPollThrottle,
 } from '../src/device.js';
@@ -476,4 +477,45 @@ test('pollPrinter publishes the device when SNMP reveals supplies IPP never anno
     'the new cartridge feature must be published before its state',
   );
   assert.equal(gladys.discoveredDevices[0].features.length, 2);
+});
+
+// --- Snapshots for the dashboard widgets ------------------------------------
+
+test('pollPrinter keeps the last answer of each printer for the widgets', async () => {
+  resetPollThrottle();
+  const gladys = createFakeGladys();
+  const device = buildPrinterDevice(gladys, probedInkjet(), config);
+  assert.equal(getPrinterSnapshot(device.external_id), undefined, 'nothing before the first poll');
+
+  let clock = 1_000_000;
+  let attributes = COLOR_INKJET_ATTRIBUTES;
+  const deps = { fetchAttributes: async () => attributes, now: () => clock };
+
+  const first = await pollPrinter(gladys, device, config, deps);
+  assert.deepEqual(first, { published: true, stateChanged: true, withLevels: true });
+  const snapshot = getPrinterSnapshot(device.external_id);
+  assert.equal(snapshot.state, 'idle');
+  assert.equal(snapshot.stateText, 'idle');
+  assert.equal(snapshot.at, clock);
+  assert.ok(snapshot.markers.some((m) => m.percent !== null));
+
+  // An unchanged state publishes nothing, but the reading time moves on.
+  clock += 15_000;
+  const quiet = await pollPrinter(gladys, device, config, deps);
+  assert.deepEqual(quiet, { published: false, stateChanged: false, withLevels: false });
+  assert.equal(getPrinterSnapshot(device.external_id).at, clock);
+
+  // A state-only sample (IPP without the SNMP fallback) keeps the markers
+  // of the last levels reading, so an SNMP-only printer never loses them.
+  clock += 15_000;
+  attributes = { 'printer-name': 'Inkjet', 'printer-state': 4 };
+  const changed = await pollPrinter(gladys, device, config, deps);
+  assert.equal(changed.stateChanged, true);
+  assert.equal(changed.withLevels, false);
+  const updated = getPrinterSnapshot(device.external_id);
+  assert.equal(updated.state, 'printing');
+  assert.deepEqual(updated.markers, snapshot.markers, 'markers survive a state-only sample');
+
+  resetPollThrottle();
+  assert.equal(getPrinterSnapshot(device.external_id), undefined);
 });
