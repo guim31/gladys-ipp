@@ -8,7 +8,7 @@
   },
   "version": "1.0.10",
   "docker_image": "ghcr.io/guim31/gladys-ipp:1.0.10",
-  "gladys_version": ">=4.86.0",
+  "gladys_version": ">=5.1.0",
   "categories": ["appliances", "network"],
   "cover_image": "https://raw.githubusercontent.com/guim31/gladys-ipp/main/cover.png",
   "transports": ["local"],
@@ -126,6 +126,49 @@
           "required": true
         }
       ]
+    }
+  ],
+  "widgets": [
+    {
+      "key": "printer",
+      "label": {
+        "en": "Printer",
+        "fr": "Imprimante"
+      },
+      "description": {
+        "en": "Ink/toner gauges, state and last reading of one printer, with a check button.",
+        "fr": "Jauges d'encre/toner, état et dernier relevé d'une imprimante, avec un bouton de vérification."
+      },
+      "icon": "printer",
+      "settings": [
+        {
+          "key": "printer",
+          "type": "select",
+          "source": "devices",
+          "label": {
+            "en": "Printer",
+            "fr": "Imprimante"
+          },
+          "description": {
+            "en": "Leave empty to show the first printer added to Gladys.",
+            "fr": "Laissez vide pour afficher la première imprimante ajoutée à Gladys."
+          },
+          "required": false
+        }
+      ],
+      "action_timeout_seconds": 60
+    },
+    {
+      "key": "supplies",
+      "label": {
+        "en": "Supplies",
+        "fr": "Consommables"
+      },
+      "description": {
+        "en": "Every printer at a glance: state and lowest supply, the most critical first.",
+        "fr": "Vos imprimantes d'un coup d'œil : état et consommable le plus bas, les plus critiques d'abord."
+      },
+      "icon": "droplet"
     }
   ]
 }

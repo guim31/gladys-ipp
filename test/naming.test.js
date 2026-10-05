@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { displayMarkerName, displayStateName } from '../src/naming.js';
+import { displayMarkerName, displayStateName, shortMarkerName } from '../src/naming.js';
 import { buildPrinterDevice } from '../src/device.js';
 import { parsePrinter } from '../src/printer.js';
 import { normalizeConfig } from '../src/config.js';
@@ -79,4 +79,33 @@ test('the language changes the names but NEVER the external_ids', () => {
     fr.features.map((f) => f.name),
     ['État', 'Encre noire', 'Encre cyan', 'Encre magenta', 'Encre jaune'],
   );
+});
+
+// --- Short names for the widget tiles ----------------------------------------
+
+test('shortMarkerName: the color alone for a cartridge, the part otherwise', () => {
+  assert.equal(shortMarkerName({ name: 'black cartridge', type: 'ink' }, 'fr'), 'Noir');
+  assert.equal(shortMarkerName({ name: 'Cyan Toner Cartridge', type: 'toner' }, 'en'), 'Cyan');
+  assert.equal(shortMarkerName({ name: 'Photo Black Ink', type: 'ink' }, 'fr'), 'Noir photo');
+  assert.equal(shortMarkerName({ name: 'Black Drum Unit', type: 'opc' }, 'fr'), 'Tambour noir');
+  assert.equal(shortMarkerName({ name: 'Drum Unit', type: null }, 'en'), 'Drum');
+  assert.equal(shortMarkerName({ name: 'Fuser Unit', type: null }, 'fr'), 'Four');
+  assert.equal(shortMarkerName({ name: 'Maintenance Box', type: null }, 'fr'), 'Récupérateur');
+  assert.equal(shortMarkerName({ name: 'Waste Toner Bottle', type: null }, 'en'), 'Waste');
+  // Unrecognized: the raw name, as the feature itself is named.
+  assert.equal(shortMarkerName({ name: 'Cartridge 1', type: null }, 'fr'), 'Cartridge 1');
+});
+
+test('shortMarkerName: raw names are kept but shortened to a tile label', () => {
+  assert.equal(
+    shortMarkerName({ name: 'Black Toner_S/N_:CRUM-25111822430', type: 'toner' }, 'printer'),
+    'Black Toner',
+  );
+  const long = shortMarkerName(
+    { name: 'A very very very long cartridge name', type: null },
+    'printer',
+  );
+  assert.ok(long.length <= 24);
+  assert.ok(long.endsWith('…'));
+  assert.equal(shortMarkerName({ name: '', type: null }, 'en'), 'Cartridge');
 });

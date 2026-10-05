@@ -30,6 +30,12 @@ Built from the official
   the device params, so polling survives restarts without a re-discovery.
 - **Test a printer** action: probe any host from the Configuration screen and
   see the model, state and levels it answers.
+- **Two dashboard widgets** (Gladys ≥ 5.1): _Printer_ — one printer with a
+  live gauge per supply (bound to the level features), its state, the time of
+  the last reading, the lowest supply and a _Check_ button that polls it now;
+  _Supplies_ — every printer in one list, the most critical first, with the
+  number of printers to watch. Both render from the last poll kept in memory:
+  a widget never sends an IPP or SNMP request.
 
 ## Project structure
 
@@ -47,9 +53,11 @@ Built from the official
 │  │  └─ supplies.js                 # Printer MIB (RFC 3805) -> supply rows
 │  ├─ printer.js                     # raw IPP attributes -> printer model (markers, state)
 │  ├─ supplies.js                    # SNMP fallback when IPP announces no supply
-│  ├─ device.js                      # printer model -> Gladys device + states, polling
+│  ├─ device.js                      # printer model -> Gladys device + states, polling, snapshots
+│  ├─ widgets.js                     # dashboard widget contents (pure builders)
 │  ├─ discovery.js                   # manual list + mDNS -> probed printers
 │  ├─ actions.js                     # manifest action handlers (test_printer)
+│  ├─ naming.js                      # feature names and short supply names (fr/en/raw)
 │  └─ config.js                      # config defaults + normalization
 ├─ docs/                             # user documentation (fr/en), re-hosted by Gladys
 ├─ gladys-assistant-integration.json # manifest (name, config schema, mDNS capture, image…)
