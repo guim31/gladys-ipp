@@ -2,7 +2,7 @@
 
 Niveaux d'encre/toner et état de vos imprimantes réseau via IPP (AirPrint). Local, sans cloud.
 
-Intégration externe pour [Gladys Assistant](https://gladysassistant.com), bâtie sur le template officiel `GladysAssistant/integration-template-js` (SDK `@gladysassistant/integration-sdk` ^0.12.0, `gladys_version` `>=4.86.0`). Mainteneur : Guilhem (`guim31`).
+Intégration externe pour [Gladys Assistant](https://gladysassistant.com), bâtie sur le template officiel `GladysAssistant/integration-template-js` (SDK `@gladysassistant/integration-sdk` ^0.14.0, `gladys_version` `>=5.1.0`). Mainteneur : Guilhem (`guim31`).
 
 Ce fichier rassemble ce qu'une session de code doit savoir et qui ne se lit pas dans le code : choix de conception, faits vérifiés en réel, pièges déjà payés. Le compléter quand un nouveau piège est découvert.
 
@@ -28,6 +28,10 @@ widgets attendent le test de Guilhem ou des testeurs du forum.
   niveaux : une imprimante SNMP-only n'annonce rien en IPP et perdrait ses jauges sinon. Le rendu
   d'un widget ne fait **aucune requête** IPP/SNMP ; seul le bouton « Vérifier » interroge
   (`pollPrinter({ force: true })`), et le cœur recharge le widget à la résolution de l'action.
+- `pollPrinter` ne lance qu'un échantillon à la fois par appareil (`pollsInFlight`) : le bouton
+  « Vérifier » et le tick de la boucle partagent la même promesse au lieu de doubler la requête
+  IPP et la publication. `action_timeout_seconds` du widget vaut 60 : un poll forcé peut
+  enchaîner plusieurs variantes IPP à 10 s chacune puis le repli SNMP.
 - `pollPrinter` renvoie `{ published, stateChanged, withLevels }` : `index.js` envoie
   `requestWidgetRefresh` aux deux widgets quand un état a changé (les jauges liées suivent les
   états toutes seules, mais les lignes d'état et la liste des consommables sont en cache côté

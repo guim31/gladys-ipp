@@ -72,7 +72,7 @@ aucune ne répond, l'appareil n'expose que son état.
 ## Widgets du tableau de bord
 
 Avec Gladys 5.1 ou plus récent, l'intégration propose deux widgets dans
-l'éditeur de tableau de bord (catégorie « Imprimantes IPP »).
+l'éditeur de tableau de bord (sous « IPP Printers », le nom de l'intégration).
 
 - **Imprimante** : une imprimante en un coup d'œil — une jauge par
   consommable (encre, toner, tambour…), l'état (prête, impression, arrêtée
