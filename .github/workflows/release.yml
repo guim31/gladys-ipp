@@ -1,19 +1,27 @@
 # -----------------------------------------------------------------------------
-# Cut a new release — entirely from the GitHub UI, no local tooling needed.
-#
-# In GitHub: Actions -> Release -> "Run workflow" -> pick patch / minor / major.
+# Cut a new release — from the GitHub UI (Actions -> Release -> "Run workflow",
+# pick patch / minor / major) or over the API (workflow_dispatch).
 #
 # What it does, in one run:
 #   1. computes the next semver from `package.json` (npm version rules);
 #   2. writes it into `package.json`, `package-lock.json` AND the manifest
 #      (`gladys-assistant-integration.json`: both `version` and the
-#      `docker_image` tag, so the indexer and the image stay in lockstep);
+#      `docker_image` tag, so the indexer and the image stay in lockstep),
+#      then re-formats the manifest with Prettier so the release commit keeps
+#      the CI `format:check` gate green;
 #   3. commits the bump and pushes the `vX.Y.Z` tag;
-#   4. calls build.yml to publish the multi-arch image (`:X.Y.Z` + `:latest`).
+#   4. calls build.yml to publish the multi-arch image (`:X.Y.Z` + `:latest`);
+#   5. creates the GitHub Release of the tag — Gladys links to it from
+#      "See the changelog of this version" in the Supervision tab. Its body is
+#      `.github/release-notes/vX.Y.Z.md` when that file exists, otherwise the
+#      notes GitHub generates from the merged pull requests.
 #
 # Why call build.yml instead of relying on the tag push: a tag pushed with the
 # default GITHUB_TOKEN does NOT trigger other workflows, so we invoke the build
 # ourselves. No personal access token to create.
+#
+# Shared by every Gladys integration of this author: edit the copy in
+# gladys-release/workflows on the maintainer's side, then propagate.
 # -----------------------------------------------------------------------------
 name: Release
 
@@ -71,6 +79,10 @@ jobs:
             gladys-assistant-integration.json > "$tmp"
           mv "$tmp" gladys-assistant-integration.json
 
+          # jq's output is not Prettier-formatted: re-format the manifest so
+          # the release commit keeps the CI `format:check` gate green.
+          npx --yes prettier@^3 --write gladys-assistant-integration.json
+
           echo "version=${new_version}" >> "$GITHUB_OUTPUT"
 
       # Note: if the branch you release from is protected against direct pushes,
@@ -101,3 +113,35 @@ jobs:
       packages: write
     with:
       version: ${{ needs.prepare.outputs.version }}
+
+  # The GitHub Release is what Gladys shows as the changelog of the version.
+  # Created only once the image exists, so a user who follows the link never
+  # reads about a version that cannot be installed yet.
+  publish:
+    needs: [prepare, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # create the release
+    steps:
+      - name: Checkout the tag
+        uses: actions/checkout@v4
+        with:
+          ref: v${{ needs.prepare.outputs.version }}
+          fetch-depth: 0
+
+      - name: Create the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: v${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            echo "Release $TAG already exists, nothing to do."
+            exit 0
+          fi
+          notes_file=".github/release-notes/${TAG}.md"
+          if [ -f "$notes_file" ]; then
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --title "$TAG" --notes-file "$notes_file"
+          else
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --title "$TAG" --generate-notes
+          fi
