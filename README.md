@@ -21,11 +21,18 @@ Built from the official
   `printing`, `stopped (media-empty)`, …).
 - **Three supply sources**, tried in that order, because firmwares disagree
   on where levels live: the `marker-*` IPP attributes, the `printer-supply`
-  pair of PWG 5100.13, and — only when IPP announces nothing at all — the
-  Printer MIB over SNMP (RFC 3805, what CUPS reads). The SNMP query is a
-  unicast to the printer the integration is already talking to, sent only
-  when the levels are due, and a printer that does not answer is left alone
-  for 30 minutes.
+  pair of PWG 5100.13, and — when IPP announces nothing at all — the
+  Printer MIB over SNMP (RFC 3805, what CUPS reads).
+- **SNMP complement for printer parts**: lasers often announce only their
+  toners over IPP, while the Printer MIB also lists the drum/imaging unit,
+  fuser, transfer belt and waste container. Those parts are appended after
+  the IPP supplies — never a cartridge, never a part IPP already announces
+  (same type, same part by name, or same key), and the IPP features keep
+  their keys. The SNMP query is a unicast to the printer the integration is
+  already talking to, sent only when the levels are due; a printer that does
+  not answer is left alone for 30 minutes, one that answers with nothing to
+  add for 6 hours. The _Test a printer_ action tells where each level comes
+  from (`(via SNMP)`, `(+ SNMP: Imaging Unit)`).
 - **Polling** at a configurable interval; the working IPP URL is stored in
   the device params, so polling survives restarts without a re-discovery.
 - **Test a printer** action: probe any host from the Configuration screen and
@@ -52,7 +59,7 @@ Built from the official
 │  │  ├─ client.js                   # SNMPv1 GetNext walk over UDP 161
 │  │  └─ supplies.js                 # Printer MIB (RFC 3805) -> supply rows
 │  ├─ printer.js                     # raw IPP attributes -> printer model (markers, state)
-│  ├─ supplies.js                    # SNMP fallback when IPP announces no supply
+│  ├─ supplies.js                    # SNMP fallback + parts complement
 │  ├─ device.js                      # printer model -> Gladys device + states, polling, snapshots
 │  ├─ widgets.js                     # dashboard widget contents (pure builders)
 │  ├─ discovery.js                   # manual list + mDNS -> probed printers
@@ -70,7 +77,7 @@ message POSTed over HTTP (`application/ipp`, port 631). The integration sends
 a single operation, `Get-Printer-Attributes`, and reads the standard
 `marker-names` / `marker-levels` / `printer-state` attributes.
 
-The SNMP client is the same idea for the fallback: BER is another TLV format,
+The SNMP client is the same idea for the fallback and the complement: BER is another TLV format,
 and one `GetNextRequest` walk over `prtMarkerSupplies` is all the Printer MIB
 needs — no dependency either. Both are tested against real local servers
 (HTTP, HTTPS and UDP), not mocks.

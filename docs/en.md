@@ -29,8 +29,16 @@ majority of printers sold since ~2012: HP, Epson, Canon, Brother, Lexmark…).
 The printer must be on the same network as Gladys, with IPP enabled (it is by
 default; some menus call it "AirPrint").
 
-Some printers do not advertise their ink levels over IPP: in that case the
-device only exposes its state.
+Printers report their levels in three different ways depending on the brand
+and firmware: the integration tries all three (the `marker-*` IPP attributes,
+the `printer-supply` variant, then SNMP — what CUPS uses — when IPP announces
+nothing). If none answers, the device only exposes its state.
+
+Many laser printers only announce their toners over IPP, while their SNMP
+table also lists the wear parts: drum or imaging unit, fuser, transfer belt,
+waste toner container. The integration reads those as a complement, never
+touching the cartridges IPP already announces. On a device already added, a
+part found this way is offered through "Update" in the **Discovery** tab.
 
 ## Configuration
 
@@ -99,6 +107,11 @@ otherwise).
   integration one. If SNMP is disabled in the printer network settings,
   turning it back on is sometimes enough for the cartridges to show up (the
   community name must stay `public`).
+- **The drum (or fuser, transfer belt…) does not show up**: those parts are
+  only read over SNMP. "Test a printer" ends with "(+ SNMP: Imaging Unit…)"
+  when SNMP added some; otherwise check that SNMP is enabled on the printer
+  (community `public`). A part IPP already announces under another name is
+  never added twice.
 - **A single cartridge shows "unknown" (often the black one, on HP)**: if
   that cartridge is refilled or third-party, this is by HP design — the
   firmware refuses to estimate the level of non-genuine cartridges (it shows

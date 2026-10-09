@@ -38,6 +38,13 @@ trois (les attributs IPP `marker-*`, la variante `printer-supply`, puis le
 protocole SNMP — celui qu'utilise CUPS — quand l'IPP n'annonce rien). Si
 aucune ne répond, l'appareil n'expose que son état.
 
+Beaucoup de lasers n'annoncent que leurs toners en IPP, alors que leur table
+SNMP liste aussi les pièces d'usure : tambour ou unité d'imagerie, four,
+courroie de transfert, récupérateur de toner. L'intégration les y lit en
+complément, sans jamais toucher aux cartouches déjà annoncées en IPP. Sur un
+appareil déjà ajouté, une pièce apparue ainsi se fait proposer par
+« Mettre à jour » dans l'onglet **Découverte**.
+
 ## Configuration
 
 1. Installez l'intégration : les imprimantes annonçant IPP en mDNS sont
@@ -111,6 +118,12 @@ consommables suivent le réglage **Noms des capteurs** (« Noir », « Cyan »,
   limite du firmware, pas de l'intégration. Si le SNMP est désactivé dans les
   réglages réseau de l'imprimante, le réactiver suffit parfois à faire
   apparaître les cartouches (le nom de communauté doit rester `public`).
+- **Le tambour (ou le four, la courroie…) n'apparaît pas** : ces pièces ne
+  sont lues qu'en SNMP. « Tester une imprimante » indique à la fin
+  « (+ SNMP : Imaging Unit…) » quand le SNMP en a ajouté ; sinon, vérifiez
+  que le SNMP est activé sur l'imprimante (communauté `public`). Une pièce
+  déjà annoncée en IPP sous un autre nom n'est jamais ajoutée une seconde
+  fois.
 - **Une seule cartouche affiche « inconnu » (souvent le noir, sur HP)** : si
   cette cartouche est rechargée ou compatible, c'est voulu par HP — le
   firmware refuse d'estimer le niveau des cartouches non authentiques (il
