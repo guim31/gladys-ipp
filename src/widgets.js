@@ -15,7 +15,7 @@
 // -----------------------------------------------------------------------------
 
 import { WIDGET_COLORS } from '@gladysassistant/integration-sdk';
-import { shortMarkerName } from './naming.js';
+import { markerPart, shortMarkerNames } from './naming.js';
 
 /** Widget keys, declared in the manifest `widgets` (forever: never rename). */
 export const WIDGET = {
@@ -34,7 +34,8 @@ export const CRITICAL_LEVEL = 10;
 export const LOW_LEVEL = 25;
 
 // The core keeps at most 8 components per widget (and 10 status rows): the
-// heading, the status list and the button leave room for 5 gauges.
+// heading, the status list and the button leave room for 5 gauges. The
+// supplies beyond them go to the status list, after its 3 rows.
 const MAX_GAUGES = 5;
 const MAX_ROWS = 10;
 const TTL_SECONDS = 300;
@@ -60,6 +61,26 @@ const TEXTS = {
     printing: { en: 'Printing', fr: 'Impression' },
     stopped: { en: 'Stopped', fr: 'Arrêtée' },
     unknown: { en: 'Unknown', fr: 'Inconnu' },
+  },
+  // The most common printer-state-reasons (severity suffix already removed
+  // by cleanStateReasons); any other one is shown as reported.
+  reasons: {
+    'toner-low': { en: 'toner low', fr: 'toner bas' },
+    'toner-empty': { en: 'toner empty', fr: 'toner vide' },
+    'marker-supply-low': { en: 'supply low', fr: 'consommable bas' },
+    'marker-supply-empty': { en: 'supply empty', fr: 'consommable vide' },
+    'marker-waste-almost-full': { en: 'waste almost full', fr: 'récupérateur presque plein' },
+    'marker-waste-full': { en: 'waste full', fr: 'récupérateur plein' },
+    'media-empty': { en: 'out of paper', fr: 'plus de papier' },
+    'media-low': { en: 'paper low', fr: 'papier bas' },
+    'media-jam': { en: 'paper jam', fr: 'bourrage papier' },
+    'media-needed': { en: 'paper needed', fr: 'papier requis' },
+    'door-open': { en: 'door open', fr: 'porte ouverte' },
+    'cover-open': { en: 'cover open', fr: 'capot ouvert' },
+    'input-tray-missing': { en: 'tray missing', fr: 'bac absent' },
+    'output-area-full': { en: 'output tray full', fr: 'bac de sortie plein' },
+    offline: { en: 'offline', fr: 'hors ligne' },
+    paused: { en: 'paused', fr: 'en pause' },
   },
 };
 
@@ -90,7 +111,7 @@ export function fit(text, max) {
 
 /**
  * Localized state of a printer, with its reasons when `withReasons`:
- * "Arrêtée (media-empty)".
+ * "Arrêtée (plus de papier)". Unknown reasons are kept as reported.
  * @param {{ state: string, stateReasons: string[] }} snapshot
  * @param {string} language
  * @param {{ withReasons?: boolean }} [options]
@@ -99,7 +120,9 @@ export function fit(text, max) {
 export function stateLabel(snapshot, language, { withReasons = true } = {}) {
   const lang = localeOf(language);
   const word = (TEXTS.states[snapshot.state] ?? TEXTS.states.unknown)[lang];
-  const reasons = withReasons ? (snapshot.stateReasons ?? []) : [];
+  const reasons = (withReasons ? (snapshot.stateReasons ?? []) : []).map(
+    (reason) => TEXTS.reasons[reason]?.[lang] ?? reason,
+  );
   return reasons.length > 0 ? `${word} (${reasons.join(', ')})` : word;
 }
 
@@ -162,6 +185,57 @@ export function lowestMarker(snapshot) {
 }
 
 /**
+ * The supplies of a printer whose level is known, in the printer order,
+ * each with its widget `label` (shortMarkerName, distinct within the
+ * printer: two rollers never share a label).
+ * @param {{ markers: Array<object> }|undefined} snapshot
+ * @param {string} featureNames language of the feature names (config)
+ * @returns {Array<object>} the markers, plus `label`
+ */
+export function labelledLevels(snapshot, featureNames) {
+  const markers = snapshot?.markers ?? [];
+  const labels = shortMarkerNames(markers, featureNames);
+  return markers
+    .map((marker, index) => ({ ...marker, label: labels[index] }))
+    .filter((marker) => typeof marker.percent === 'number');
+}
+
+/**
+ * Whether a supply is a cartridge (ink, toner) rather than a printer part
+ * or a waste container: those come first on the printer widget.
+ * @param {{ name?: string, type?: string|null }} marker
+ * @returns {boolean}
+ */
+function isCartridge(marker) {
+  return markerPart(marker) === null;
+}
+
+/**
+ * Share the known levels of a printer between the gauges and the status
+ * rows. All fit: every one gets a gauge, in the printer order. Beyond the
+ * tile budget, no cartridge is pushed out by a part: the cartridges first,
+ * in the printer order (the lowest ones when there are more than the
+ * budget), then the parts, the lowest first. The others become status rows,
+ * the lowest first.
+ * @param {Array<object>} known supplies with a known level, printer order
+ * @returns {{ gauges: Array<object>, rows: Array<object> }}
+ */
+export function splitLevels(known) {
+  if (known.length <= MAX_GAUGES) {
+    return { gauges: known, rows: [] };
+  }
+  let cartridges = known.filter(isCartridge);
+  if (cartridges.length > MAX_GAUGES) {
+    const lowest = new Set(knownLevels(cartridges).slice(0, MAX_GAUGES));
+    cartridges = cartridges.filter((marker) => lowest.has(marker));
+  }
+  const parts = knownLevels(known.filter((marker) => !isCartridge(marker)));
+  const gauges = [...cartridges, ...parts.slice(0, MAX_GAUGES - cartridges.length)];
+  const shown = new Set(gauges);
+  return { gauges, rows: knownLevels(known.filter((marker) => !shown.has(marker))) };
+}
+
+/**
  * Time of a reading, short: "14:05" today, "04/10 14:05" before.
  * @param {number} at epoch ms of the reading
  * @param {string} language
@@ -194,7 +268,7 @@ export function printerSummary(snapshot, language, featureNames) {
     return { text: TEXTS.waiting[lang], color: WIDGET_COLORS.NEUTRAL, percent: null, read: false };
   }
   const state = stateLabel(snapshot, lang, { withReasons: false });
-  const lowest = lowestMarker(snapshot);
+  const lowest = knownLevels(labelledLevels(snapshot, featureNames))[0];
   if (!lowest) {
     return {
       text: fit(state, 40),
@@ -207,7 +281,7 @@ export function printerSummary(snapshot, language, featureNames) {
   // supply name gives way when the three do not fit in 40 characters.
   const tail = ` ${lowest.percent} %`;
   const room = 40 - state.length - ' · '.length - tail.length;
-  const name = fit(shortMarkerName(lowest, featureNames), Math.max(room, 4));
+  const name = fit(lowest.label, Math.max(room, 4));
   return {
     text: `${state} · ${name}${tail}`,
     color:
@@ -231,21 +305,40 @@ export function markerFeatureId(device, marker) {
 }
 
 /**
- * The gauges of a printer: one per supply with a known level, bound to the
- * level feature when the created device has it (live), inline otherwise (a
- * cartridge that appeared since the device was added). Before the first
- * reading, the level features of the device, as they are.
+ * The gauge of one supply, bound to the level feature when the created
+ * device has it (live), inline otherwise (a cartridge that appeared since
+ * the device was added).
+ * @param {{ external_id: string }} device
+ * @param {Set<string>} features external ids of the device features
+ * @param {object} marker a supply of labelledLevels
+ * @returns {object} gauge component
+ */
+function supplyGauge(device, features, marker) {
+  const gauge = { type: 'gauge', label: fit(marker.label, 24), color: levelColor(marker.percent) };
+  const featureId = markerFeatureId(device, marker);
+  if (features.has(featureId)) {
+    return { ...gauge, device_feature: featureId };
+  }
+  return { ...gauge, value: marker.percent, min: 0, max: 100, unit: '%' };
+}
+
+/**
+ * The gauges of a printer (see splitLevels for which supplies get one).
+ * Before the first reading, the level features of the device, cartridges
+ * first (recognized by their name), with their frozen names.
  * @param {{ external_id: string, features?: Array<{ external_id: string, name: string }> }} device
  * @param {object|undefined} snapshot
  * @param {string} featureNames language of the feature names (config)
  * @returns {Array<object>} gauge components, at most MAX_GAUGES
  */
 export function printerGauges(device, snapshot, featureNames) {
-  const features = new Set((device.features ?? []).map((feature) => feature.external_id));
   if (!snapshot) {
     const prefix = `${device.external_id}:marker:`;
-    return (device.features ?? [])
-      .filter((feature) => feature.external_id.startsWith(prefix))
+    const levels = (device.features ?? []).filter((feature) =>
+      feature.external_id.startsWith(prefix),
+    );
+    const byName = (feature) => isCartridge({ name: feature.name, type: null });
+    return [...levels.filter(byName), ...levels.filter((feature) => !byName(feature))]
       .slice(0, MAX_GAUGES)
       .map((feature) => ({
         type: 'gauge',
@@ -253,21 +346,10 @@ export function printerGauges(device, snapshot, featureNames) {
         device_feature: feature.external_id,
       }));
   }
-  const known = (snapshot.markers ?? []).filter((marker) => typeof marker.percent === 'number');
-  // The printer's own order fits; beyond the tile budget, the lowest first.
-  const shown = known.length > MAX_GAUGES ? knownLevels(known).slice(0, MAX_GAUGES) : known;
-  return shown.map((marker) => {
-    const gauge = {
-      type: 'gauge',
-      label: fit(shortMarkerName(marker, featureNames), 24),
-      color: levelColor(marker.percent),
-    };
-    const featureId = markerFeatureId(device, marker);
-    if (features.has(featureId)) {
-      return { ...gauge, device_feature: featureId };
-    }
-    return { ...gauge, value: marker.percent, min: 0, max: 100, unit: '%' };
-  });
+  const features = new Set((device.features ?? []).map((feature) => feature.external_id));
+  return splitLevels(labelledLevels(snapshot, featureNames)).gauges.map((marker) =>
+    supplyGauge(device, features, marker),
+  );
 }
 
 /**
@@ -304,6 +386,7 @@ export function buildPrinterContent({
     { type: 'text', variant: 'heading', text: fit(device.name, 40) },
     ...printerGauges(device, snapshot, featureNames),
   ];
+  const known = labelledLevels(snapshot, featureNames);
   const rows = [];
   if (!snapshot) {
     rows.push({ label: TEXTS.state, value: TEXTS.waiting[lang], color: WIDGET_COLORS.NEUTRAL });
@@ -314,18 +397,26 @@ export function buildPrinterContent({
       color: stateColor(snapshot),
     });
     rows.push({ label: TEXTS.lastReading, value: formatReadingTime(snapshot.at, lang, now) });
-    const lowest = lowestMarker(snapshot);
+    const lowest = knownLevels(known)[0];
     rows.push(
       lowest
         ? {
             label: TEXTS.lowest,
-            value: fit(`${shortMarkerName(lowest, featureNames)} · ${lowest.percent} %`, 40),
+            value: fit(`${lowest.label} · ${lowest.percent} %`, 40),
             color: levelColor(lowest.percent),
           }
         : { label: TEXTS.lowest, value: TEXTS.noLevel[lang], color: WIDGET_COLORS.NEUTRAL },
     );
+    // The supplies left without a gauge are listed, so none goes missing.
+    for (const marker of splitLevels(known).rows) {
+      rows.push({
+        label: fit(marker.label, 40),
+        value: `${marker.percent} %`,
+        color: levelColor(marker.percent),
+      });
+    }
   }
-  components.push({ type: 'status', items: rows });
+  components.push({ type: 'status', items: rows.slice(0, MAX_ROWS) });
   components.push({
     type: 'button',
     label: TEXTS.check,

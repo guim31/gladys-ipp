@@ -89,9 +89,13 @@ l'éditeur de tableau de bord (sous « IPP Printers », le nom de l'intégration
   la première ajoutée à Gladys). Les jauges sont liées aux capteurs de
   l'appareil : elles suivent les niveaux en direct, sans attendre le
   rafraîchissement du widget. Limites : au plus **5 jauges** (le tableau de
-  bord limite un widget à 8 éléments) ; au-delà, les niveaux les plus bas
-  sont affichés en priorité. Les jauges sont vertes à partir de 25 %, orange
-  en dessous, rouges sous 10 %.
+  bord limite un widget à 8 éléments) ; au-delà, les cartouches (encre,
+  toner) passent d'abord, dans l'ordre de l'imprimante, puis les pièces
+  (tambour, four, courroie, rouleaux…), la plus basse d'abord. Aucun
+  consommable ne disparaît : ceux qui n'ont pas de jauge sont listés sous
+  l'état, les plus bas d'abord (« Four 92 % »). Les jauges sont vertes à
+  partir de 25 %, orange en dessous, rouges sous 10 %. Les raisons d'état
+  courantes sont traduites (« Prête (toner bas) »).
 - **Consommables** : toutes vos imprimantes en une liste, les plus critiques
   d'abord — pour chacune, l'état et le consommable le plus bas (« Prête ·
   Noir 12 % »), avec la couleur du niveau (rouge sous 10 %, orange sous
@@ -104,7 +108,10 @@ jamais l'imprimante eux-mêmes, sauf par le bouton **Vérifier**. Tant qu'une
 imprimante n'a pas encore répondu depuis le démarrage de l'intégration, son
 état indique « En attente du premier relevé ». Les noms courts des
 consommables suivent le réglage **Noms des capteurs** (« Noir », « Cyan »,
-« Tambour »… en français ; le nom brut annoncé par l'imprimante sinon).
+« Tambour », « Rouleau prise bac 1 »… en français ; le nom brut annoncé par
+l'imprimante sinon). Deux consommables d'une même imprimante ne portent
+jamais le même nom : à défaut de qualificatif reconnu, le nom brut de
+l'imprimante ou un numéro (« Rouleau 1 », « Rouleau 2 ») les départage.
 
 ## Dépannage
 

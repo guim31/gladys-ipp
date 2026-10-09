@@ -6,13 +6,13 @@ Intégration externe pour [Gladys Assistant](https://gladysassistant.com), bâti
 
 Ce fichier rassemble ce qu'une session de code doit savoir et qui ne se lit pas dans le code : choix de conception, faits vérifiés en réel, pièges déjà payés. Le compléter quand un nouveau piège est découvert.
 
-## État au 05/10/2026
+## État au 09/10/2026
 
-Version 1.0.10 publiée, indexée dans le store (SDK 0.12, Gladys ≥ 4.86, sans widget). La branche
-`feat/dashboard-widgets` passe au SDK ^0.14.0 et à `gladys_version >=5.1.0` pour ajouter deux
-widgets de tableau de bord, `printer` et `supplies` : une fois publiée, la version suivante ne
-sera plus proposée aux cœurs plus anciens. Rien n'a encore été vu sur une instance réelle : les
-widgets attendent le test de Guilhem ou des testeurs du forum.
+Version 1.2.0 publiée (SDK ^0.14.0, `gladys_version >=5.1.0`) : widgets `printer` et `supplies`,
+complément SNMP des pièces. Le testeur JPPUYB confirme le tambour de sa Samsung M262x. La branche
+`fix/widget-all-supplies` corrige ses deux retours sur le widget `printer` (cartouches poussées
+hors des jauges par les pièces, deux jauges « Rouleau ») et traduit les raisons d'état. Non
+testée sur une vraie imprimante.
 
 ## Notes de conception
 
@@ -38,12 +38,26 @@ widgets attendent le test de Guilhem ou des testeurs du forum.
   cœur jusqu'à `ttl_seconds` = 300).
 - **Budget des widgets** : 8 composants au total. Avec l'en-tête, la liste `status` et le bouton,
   il ne reste que **5 jauges** au widget `printer` (le brief en demandait 6 : impossible sans
-  perdre l'en-tête ou le bouton). Au-delà de 5 niveaux connus, les plus bas passent d'abord.
+  perdre l'en-tête ou le bouton). Règle des jauges (`splitLevels`, `widgets.js`) :
+  - jusqu'à 5 niveaux connus, tous en jauges, dans l'ordre de l'imprimante ;
+  - au-delà, les **cartouches** d'abord (ce que `markerPart` ne reconnaît ni comme pièce ni comme
+    récupérateur), dans l'ordre de l'imprimante ; plus de 5 cartouches : les 5 plus basses,
+    toujours dans l'ordre de l'imprimante. Les places restantes aux pièces, la plus basse
+    d'abord (à égalité, l'ordre de l'imprimante). En 1.2.0, les 5 plus bas tout court : une
+    laser couleur à quatre toners et trois pièces SNMP perdait ses toners les plus pleins (HP 178nw du
+    testeur : magenta et noir absents, four et rouleau à 92-97 % affichés) ;
+  - aucun consommable ne disparaît : ceux sans jauge deviennent des lignes de la liste `status`
+    après les trois lignes fixes (« Four » · « 92 % », couleur `levelColor`), les plus bas
+    d'abord, la liste coupée à 10 lignes (`MAX_STATUS_ITEMS` du cœur) ;
+  - avant le premier relevé, les jauges viennent des fonctionnalités de l'appareil : cartouches
+    d'abord, reconnues par le **nom** de la fonctionnalité (`markerPart` lit aussi le français).
 - **Couleurs d'état** : `cleanStateReasons` retire la sévérité des `printer-state-reasons`
   (`-error`, `-warning`, `-report`), on ne peut donc pas distinguer une erreur d'un avertissement
   au rendu. Règle retenue : `stopped` → `danger`, `printing` → `info`, `idle` sans raison →
   `success`, `idle` avec raison → `warning`, inconnu → `neutral`. Jamais de style ni de couleur
-  `primary` (invisible en mode sombre), un test le vérifie.
+  `primary` (invisible en mode sombre), un test le vérifie. Les raisons courantes sont traduites
+  dans la ligne État (`TEXTS.reasons` : « Prête (toner bas) », « Idle (toner low) ») ; une
+  raison inconnue reste brute.
 - **Complément SNMP** (`withFallbackSupplies` / `complementRows`, `supplies.js`) : quand IPP
   annonce déjà des consommables, la table SNMP (Printer MIB) est lue aussi, aux mêmes moments
   que le repli (découverte, `pollPrinter` quand les niveaux sont dus, bouton de test), et les
@@ -73,6 +87,22 @@ widgets attendent le test de Guilhem ou des testeurs du forum.
   seule pour une cartouche (« Noir », « Cyan »), la pièce sinon (« Tambour noir », « Four »,
   « Récupérateur ») ; en mode `printer` le nom brut, débarrassé d'un suffixe de numéro de série
   et coupé à 24. Une « Imaging Unit » donne « Tambour » sur une tuile.
+- **Rouleaux** (`rollerName`, `naming.js`) : qualificatifs reconnus dans le nom brut — prise
+  (pickup, pick-up, pick up), séparation (retard, separation), entraînement (feed), bac N
+  (tray N, cassette N), bac multifonction (MP, MPT, multipurpose, manual, bypass). Court :
+  « Rouleau prise bac 1 », « Pickup roller tray 1 » ; au-delà de 24 caractères, le mot rouleau
+  saute (« Entraînement bac MF »). Long : « Rouleau de prise papier (bac 1) », « Pickup roller
+  (tray 1) ». Un « Transfer Roller » reste une pièce de transfert (« Transfert »), la regex
+  `transfer` passe avant `roller` dans `PARTS`. Noms bruts Samsung supposés, pas vus.
+- **Homonymes** (`shortMarkerNames` / `displayMarkerNames`, `naming.js`) : quand deux
+  consommables d'une même imprimante aboutissent au même nom (insensible à la casse), on prend
+  le nom brut nettoyé (sans `S/N`) s'ils diffèrent tous du nom calculé et entre eux — tel quel
+  sur une tuile (coupé à 24), « Rouleau (Roller A) » pour une fonctionnalité — sinon un numéro
+  dans l'ordre de l'imprimante (« Rouleau 1 », « Rouleau 2 », tenu dans 24 sur une tuile). Les
+  noms des fonctionnalités sont départagés dans `buildPrinterDevice` sur les seuls marqueurs à
+  niveau connu (ceux qui deviennent des fonctionnalités). Jamais les clés ni les `external_id`.
+  Un appareil déjà créé garde ses noms (figés), « Mettre à jour » compris : seule une
+  fonctionnalité nouvelle prend le nom départagé.
 - `displayMarkerName` (noms des fonctionnalités, fr/en) reconnaît les pièces depuis le
   complément SNMP : « Unité d'imagerie », « Tambour noir », « Four », « Unité de
   transfert »… au lieu de « Encre noire » pour un tambour noir. Ne vaut que pour les
@@ -85,9 +115,8 @@ widgets attendent le test de Guilhem ou des testeurs du forum.
   `status`), les niveaux connus croissants, puis les imprimantes sans niveau, puis celles jamais
   relevées.
 
-Branche `feat/snmp-supply-complement` (demande du forum, testeur JPPUYB : unité d'imagerie
-d'une Samsung mono absente) : complément SNMP des pièces, voir ci-dessus. Non testé sur une
-vraie imprimante.
+Complément SNMP des pièces publié en 1.2.0 (demande du forum, testeur JPPUYB : unité d'imagerie
+d'une Samsung mono absente), confirmé sur sa Samsung M262x (tambour à 10 %).
 
 ## Travailler sur ce dépôt
 

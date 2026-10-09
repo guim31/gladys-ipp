@@ -1,6 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { displayMarkerName, displayStateName, markerPart, shortMarkerName } from '../src/naming.js';
+import {
+  displayMarkerName,
+  displayMarkerNames,
+  displayStateName,
+  markerPart,
+  shortMarkerName,
+  shortMarkerNames,
+} from '../src/naming.js';
 import { buildPrinterDevice } from '../src/device.js';
 import { parsePrinter } from '../src/printer.js';
 import { normalizeConfig } from '../src/config.js';
@@ -154,4 +161,180 @@ test('shortMarkerName: raw names are kept but shortened to a tile label', () => 
   assert.ok(long.length <= 24);
   assert.ok(long.endsWith('…'));
   assert.equal(shortMarkerName({ name: '', type: null }, 'en'), 'Cartridge');
+});
+
+// --- Rollers and same-name supplies ------------------------------------------
+
+test('rollers get their qualifiers: pickup, feed, separation, tray', () => {
+  const cases = [
+    ['Tray1 Pickup Roller', 'Rouleau prise bac 1', 'Pickup roller tray 1'],
+    ['Tray 2 Pick-up Roller', 'Rouleau prise bac 2', 'Pickup roller tray 2'],
+    ['Pick up Roller', 'Rouleau prise', 'Pickup roller'],
+    ['Tray1 Retard Roller', 'Rouleau séparation bac 1', 'Separation roller tray 1'],
+    ['Separation Roller', 'Rouleau séparation', 'Separation roller'],
+    ['MP Pickup Roller', 'Rouleau prise bac MF', 'Pickup roller MP tray'],
+    ['MPT Separation Roller', 'Séparation bac MF', 'Separation MP tray'],
+    // Too long with the tray ("Rouleau entraînement bac MF"): the
+    // qualifiers alone.
+    ['Bypass Feed Roller', 'Entraînement bac MF', 'Feed roller MP tray'],
+    ['Manual Feed Roller', 'Entraînement bac MF', 'Feed roller MP tray'],
+    ['Paper Feed Roller', 'Rouleau entraînement', 'Feed roller'],
+    ['Roller', 'Rouleau', 'Roller'],
+    ['Tray3 Roller', 'Rouleau bac 3', 'Roller tray 3'],
+  ];
+  for (const [name, fr, en] of cases) {
+    const supply = { name, type: 'other' };
+    const short = { fr: shortMarkerName(supply, 'fr'), en: shortMarkerName(supply, 'en') };
+    assert.equal(short.fr, fr, name);
+    assert.equal(short.en, en, name);
+    assert.ok(short.fr.length <= 24 && short.en.length <= 24, name);
+    assert.equal(markerPart(supply), 'roller', name);
+  }
+  assert.equal(
+    displayMarkerName({ name: 'Tray1 Pickup Roller', type: 'other' }, 'fr'),
+    'Rouleau de prise papier (bac 1)',
+  );
+  assert.equal(
+    displayMarkerName({ name: 'MP Pickup Roller', type: 'other' }, 'en'),
+    'Pickup roller (multipurpose tray)',
+  );
+  assert.equal(
+    displayMarkerName({ name: 'Tray1 Retard Roller', type: null }, 'fr'),
+    'Rouleau de séparation (bac 1)',
+  );
+  assert.equal(
+    displayMarkerName({ name: 'Feed Roller', type: null }, 'fr'),
+    "Rouleau d'entraînement",
+  );
+  assert.equal(displayMarkerName({ name: 'Roller', type: null }, 'fr'), 'Rouleau');
+  // printer mode: the raw name, untouched.
+  assert.equal(
+    displayMarkerName({ name: 'Tray1 Pickup Roller', type: null }, 'printer'),
+    'Tray1 Pickup Roller',
+  );
+});
+
+test('a transfer roller stays a transfer part, not a roller', () => {
+  const supply = { name: 'Transfer Roller', type: 'other' };
+  assert.equal(markerPart(supply), 'transfer');
+  assert.equal(shortMarkerName(supply, 'fr'), 'Transfert');
+  assert.equal(shortMarkerName(supply, 'en'), 'Transfer');
+  assert.equal(displayMarkerName(supply, 'fr'), 'Unité de transfert');
+});
+
+test('two supplies of one printer never share a name: raw name, else a number', () => {
+  // Qualified rollers are distinct by themselves.
+  const samsung = [
+    { name: 'Tray1 Pickup Roller', type: 'other' },
+    { name: 'MP Pickup Roller', type: 'other' },
+  ];
+  assert.deepEqual(shortMarkerNames(samsung, 'fr'), [
+    'Rouleau prise bac 1',
+    'Rouleau prise bac MF',
+  ]);
+  assert.deepEqual(displayMarkerNames(samsung, 'fr'), [
+    'Rouleau de prise papier (bac 1)',
+    'Rouleau de prise papier (bac multifonction)',
+  ]);
+
+  // No recognizable qualifier: the cleaned raw name tells them apart.
+  const plain = [
+    { name: 'Roller A', type: 'other' },
+    { name: 'Black Toner', type: 'toner' },
+    { name: 'Roller B', type: 'other' },
+  ];
+  assert.deepEqual(shortMarkerNames(plain, 'fr'), ['Roller A', 'Noir', 'Roller B']);
+  assert.deepEqual(displayMarkerNames(plain, 'fr'), [
+    'Rouleau (Roller A)',
+    'Toner noir',
+    'Rouleau (Roller B)',
+  ]);
+  assert.deepEqual(shortMarkerNames(plain, 'en'), ['Roller A', 'Black', 'Roller B']);
+
+  // Same raw names: a number, in the printer order.
+  const same = [
+    { name: 'Roller', type: 'other' },
+    { name: 'Roller', type: 'other' },
+  ];
+  assert.deepEqual(shortMarkerNames(same, 'fr'), ['Rouleau 1', 'Rouleau 2']);
+  assert.deepEqual(displayMarkerNames(same, 'fr'), ['Rouleau 1', 'Rouleau 2']);
+  assert.deepEqual(displayMarkerNames(same, 'printer'), ['Roller 1', 'Roller 2']);
+  assert.deepEqual(shortMarkerNames(same, 'printer'), ['Roller 1', 'Roller 2']);
+  // Deterministic.
+  assert.deepEqual(displayMarkerNames(same, 'fr'), displayMarkerNames(same, 'fr'));
+
+  // printer mode: raw names that only differ past the tile bound get a
+  // number on the tiles, and keep their full raw names as features.
+  const longRaw = [
+    { name: 'Very Long Supply Name Number One', type: null },
+    { name: 'Very Long Supply Name Number Two', type: null },
+  ];
+  const tiles = shortMarkerNames(longRaw, 'printer');
+  assert.equal(new Set(tiles).size, 2);
+  assert.ok(tiles.every((label) => label.length <= 24));
+  assert.deepEqual(tiles, ['Very Long Supply Name… 1', 'Very Long Supply Name… 2']);
+  assert.deepEqual(
+    displayMarkerNames(longRaw, 'printer'),
+    longRaw.map((m) => m.name),
+  );
+
+  // Distinct names are left alone.
+  const inkjet = [
+    { name: 'Black Cartridge', type: 'ink-cartridge' },
+    { name: 'Cyan Cartridge', type: 'ink-cartridge' },
+  ];
+  assert.deepEqual(displayMarkerNames(inkjet, 'fr'), ['Encre noire', 'Encre cyan']);
+});
+
+test('feature names of a printer with two same-name parts are distinct', () => {
+  const gladys = createFakeGladys();
+  const printer = {
+    ...parsePrinter(COLOR_INKJET_ATTRIBUTES),
+    markers: [
+      {
+        key: 'black-toner',
+        name: 'Black Toner',
+        type: 'toner',
+        color: null,
+        percent: 40,
+        rawLevel: 40,
+      },
+      {
+        key: 'roller',
+        name: 'Roller',
+        type: 'other',
+        color: null,
+        percent: 85,
+        rawLevel: 85,
+        source: 'snmp',
+      },
+      {
+        key: 'roller-2',
+        name: 'Roller',
+        type: 'other',
+        color: null,
+        percent: 85,
+        rawLevel: 85,
+        source: 'snmp',
+      },
+      { key: 'unknown', name: 'Roller', type: 'other', color: null, percent: null, rawLevel: -3 },
+    ],
+  };
+  const device = buildPrinterDevice(
+    gladys,
+    { printer, url: 'http://printer.local:631/ipp/print' },
+    {
+      feature_names: 'fr',
+    },
+  );
+  const levels = device.features.filter((f) => f.external_id.includes(':marker:'));
+  assert.deepEqual(
+    levels.map((f) => f.name),
+    ['Toner noir', 'Rouleau 1', 'Rouleau 2'],
+  );
+  // The keys are the raw ones, untouched.
+  assert.deepEqual(
+    levels.map((f) => f.external_id.split(':marker:')[1]),
+    ['black-toner', 'roller', 'roller-2'],
+  );
 });
