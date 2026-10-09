@@ -6,8 +6,8 @@
     "en": "Ink/toner levels and state of your network printers over IPP (AirPrint). Local, no cloud.",
     "fr": "Niveaux d'encre/toner et état de vos imprimantes réseau via IPP (AirPrint). Local, sans cloud."
   },
-  "version": "1.1.0",
-  "docker_image": "ghcr.io/guim31/gladys-ipp:1.1.0",
+  "version": "1.2.0",
+  "docker_image": "ghcr.io/guim31/gladys-ipp:1.2.0",
   "gladys_version": ">=5.1.0",
   "categories": ["appliances", "network"],
   "cover_image": "https://raw.githubusercontent.com/guim31/gladys-ipp/main/cover.png",
