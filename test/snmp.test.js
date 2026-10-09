@@ -136,17 +136,19 @@ test('hostOf extracts the hostname, IPv6 brackets stripped', () => {
   assert.equal(hostOf('http://[fe80::1]:631/ipp/print'), 'fe80::1');
 });
 
-test('withFallbackSupplies never queries SNMP when IPP already announced supplies', async () => {
+test('withFallbackSupplies keeps the IPP printer as is when SNMP has nothing to add', async () => {
   resetSupplyFallback();
   let called = 0;
-  const printer = { markers: [{ key: 'black', name: 'Black', percent: 42 }] };
+  const printer = { markers: [{ key: 'black', name: 'Black', type: 'ink', percent: 42 }] };
   const result = await withFallbackSupplies(printer, 'http://192.168.1.20:631/ipp/print', {
     readSupplies: async () => {
       called += 1;
-      return [];
+      return [{ name: 'Black ink', color: null, type: 'ink', level: 42, high: 100 }];
     },
   });
-  assert.equal(called, 0, 'a working printer must not generate a single SNMP packet');
+  // Since the SNMP complement, IPP supplies no longer mean zero SNMP packet
+  // (see test/complement.test.js); a cartridge-only table changes nothing.
+  assert.equal(called, 1);
   assert.equal(result, printer);
 });
 

@@ -45,11 +45,23 @@ export function displayMarkerName(marker, lang) {
 
   // Waste containers have no color but a very recognizable name. Inkjets
   // call theirs a maintenance box, laser printers a waste toner bottle.
-  if (/waste|maintenance[ -]?box/.test(haystack)) {
+  if (WASTE.test(haystack)) {
     if (/ink|encre|maintenance[ -]?box/.test(haystack)) {
       return lang === 'fr' ? "Bac de récupération d'encre" : 'Waste ink container';
     }
     return lang === 'fr' ? 'Récupérateur de toner' : 'Waste container';
+  }
+  // Printer parts (drum, imaging unit, fuser...) used to fall through to the
+  // cartridge rule below ("Black Drum Unit" became "Encre noire"). Feature
+  // names are frozen at creation, so this only names NEW features right.
+  const part = findPart(marker, haystack);
+  if (part) {
+    if (!color) {
+      return part[`long${lang === 'fr' ? 'Fr' : 'En'}`];
+    }
+    return lang === 'fr'
+      ? `${part.longFr} ${part.feminine ? color.frF : color.frM}`
+      : `${color.en} ${part.longEn.toLowerCase()}`;
   }
   if (!color) {
     return marker.name;
@@ -110,10 +122,10 @@ export function shortMarkerName(marker, lang) {
   const color = COLORS.find((c) => c.match.test(haystack));
   const colorName = color ? SHORT_COLORS[color.en][lang] : null;
 
-  if (/waste|maintenance[ -]?box/.test(haystack)) {
+  if (WASTE.test(haystack)) {
     return lang === 'fr' ? 'Récupérateur' : 'Waste';
   }
-  const part = PARTS.find((p) => p.match.test(haystack));
+  const part = findPart(marker, haystack);
   if (part) {
     if (!colorName) {
       return part[lang];
@@ -123,13 +135,119 @@ export function shortMarkerName(marker, lang) {
   return colorName ?? fitLabel(raw);
 }
 
+// Waste containers: a laser's waste toner bottle, an inkjet's maintenance box.
+const WASTE = /waste|maintenance[ -]?box|r[ée]cup[ée]rat/;
+
 // Printer parts that are not cartridges but do report a level over IPP/SNMP.
+// `en`/`fr` are the short widget labels, `longEn`/`longFr` the feature names;
+// `feminine` drives the french color adjective. `id` identifies the part
+// across sources (an IPP "Drum" and an SNMP "Imaging Unit" are the same one).
+// Order matters: the imaging unit must match before the plain drum.
 const PARTS = [
-  { match: /drum|tambour|opc|imaging[ -]?unit/, en: 'Drum', fr: 'Tambour' },
-  { match: /fuser|fixing|four/, en: 'Fuser', fr: 'Four' },
-  { match: /transfer|belt|courroie/, en: 'Transfer', fr: 'Transfert' },
-  { match: /roller|rouleau/, en: 'Roller', fr: 'Rouleau' },
+  {
+    id: 'drum',
+    match: /imaging[ -]?unit|unit[ée] d'imagerie/,
+    en: 'Drum',
+    fr: 'Tambour',
+    longEn: 'Imaging unit',
+    longFr: "Unité d'imagerie",
+    feminine: true,
+  },
+  {
+    id: 'drum',
+    match: /drum|tambour|\bopc\b|photoconduct/,
+    en: 'Drum',
+    fr: 'Tambour',
+    longEn: 'Drum',
+    longFr: 'Tambour',
+  },
+  {
+    id: 'developer',
+    match: /develop|d[ée]veloppe/,
+    en: 'Developer',
+    fr: 'Développeur',
+    longEn: 'Developer',
+    longFr: 'Développeur',
+  },
+  {
+    id: 'fuser',
+    match: /fuser|fixing|four/,
+    en: 'Fuser',
+    fr: 'Four',
+    longEn: 'Fuser',
+    longFr: 'Four',
+  },
+  {
+    id: 'transfer',
+    match: /transfer|belt|courroie/,
+    en: 'Transfer',
+    fr: 'Transfert',
+    longEn: 'Transfer unit',
+    longFr: 'Unité de transfert',
+    feminine: true,
+  },
+  {
+    id: 'cleaner',
+    match: /clean|nettoyage/,
+    en: 'Cleaner',
+    fr: 'Nettoyage',
+    longEn: 'Cleaning unit',
+    longFr: 'Unité de nettoyage',
+    feminine: true,
+  },
+  {
+    id: 'roller',
+    match: /roller|rouleau/,
+    en: 'Roller',
+    fr: 'Rouleau',
+    longEn: 'Roller',
+    longFr: 'Rouleau',
+  },
 ];
+
+// Supply types (IPP marker-types and their SNMP equivalents, see
+// SUPPLY_TYPES in snmp/supplies.js) that ARE cartridges: never a part, even
+// when the name mentions one ("Toner/Drum kit" stays a toner).
+export const CARTRIDGE_TYPES = new Set([
+  'toner',
+  'ink',
+  'ink-cartridge',
+  'toner-cartridge',
+  'ink-ribbon',
+]);
+
+/**
+ * The part a supply is, from its name and type.
+ * @param {{ name?: string, type?: string|null }} marker
+ * @param {string} haystack lowercased "name type"
+ * @returns {object|undefined} a PARTS entry
+ */
+function findPart(marker, haystack) {
+  if (CARTRIDGE_TYPES.has(marker.type)) {
+    return undefined;
+  }
+  return PARTS.find((p) => p.match.test(haystack));
+}
+
+/**
+ * Identify a printer part (anything but an ink/toner cartridge) by its name
+ * and type: 'drum', 'developer', 'fuser', 'transfer', 'cleaner', 'roller',
+ * 'waste', or null for a cartridge or an unrecognized supply. Shared by the
+ * names and by the SNMP complement, which must not add a part IPP already
+ * announces under another name.
+ * @param {{ name?: string, type?: string|null }} marker
+ * @returns {string|null}
+ */
+export function markerPart(marker) {
+  if (CARTRIDGE_TYPES.has(marker.type)) {
+    return null;
+  }
+  const haystack = `${marker.name ?? ''} ${marker.type ?? ''}`.toLowerCase();
+  if (WASTE.test(haystack)) {
+    return 'waste';
+  }
+  return findPart(marker, haystack)?.id ?? null;
+}
 
 /**
  * Shorten a raw supply name to a widget label: drop a serial-number tail
