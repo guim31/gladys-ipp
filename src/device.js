@@ -17,7 +17,7 @@ import {
   DEVICE_FEATURE_UNITS,
 } from '@gladysassistant/integration-sdk';
 import { getPrinterAttributes } from './ipp/client.js';
-import { displayMarkerName, displayStateName } from './naming.js';
+import { displayMarkerNames, displayStateName } from './naming.js';
 import { parsePrinter, slugify } from './printer.js';
 import { withFallbackSupplies } from './supplies.js';
 
@@ -132,6 +132,10 @@ function deviceName(printer, url) {
 export function buildPrinterDevice(gladys, { printer, url }, config = {}) {
   const lang = config.feature_names ?? 'printer';
   const ids = gladys.externalIds(DEVICE_TYPE, platformIdFor(printer, url));
+  const levels = printer.markers.filter((marker) => marker.percent !== null);
+  // Two supplies may get the same display name (two SNMP rollers): told
+  // apart here, since a feature name is frozen once the device is created.
+  const names = displayMarkerNames(levels, lang);
   const features = [
     {
       name: displayStateName(lang),
@@ -147,24 +151,22 @@ export function buildPrinterDevice(gladys, { printer, url }, config = {}) {
       has_feedback: false,
       keep_history: false,
     },
-    ...printer.markers
-      .filter((marker) => marker.percent !== null)
-      .map((marker) => ({
-        name: displayMarkerName(marker, lang),
-        external_id: ids.feature(`marker:${marker.key}`),
-        category: DEVICE_FEATURE_CATEGORIES.LEVEL_SENSOR,
-        // A supply level IS a level expressed as a percentage. This type also
-        // drives the UI icon: Gladys maps level-sensor icons per TYPE, and
-        // the generic sensor/integer type has no entry, so it rendered with
-        // no icon at all. liquid-level-percent shows the droplet.
-        type: DEVICE_FEATURE_TYPES.LEVEL_SENSOR.LIQUID_LEVEL_PERCENT,
-        unit: DEVICE_FEATURE_UNITS.PERCENT,
-        min: 0,
-        max: 100,
-        read_only: true,
-        has_feedback: false,
-        keep_history: true, // draw the consumption curve over time
-      })),
+    ...levels.map((marker, index) => ({
+      name: names[index],
+      external_id: ids.feature(`marker:${marker.key}`),
+      category: DEVICE_FEATURE_CATEGORIES.LEVEL_SENSOR,
+      // A supply level IS a level expressed as a percentage. This type also
+      // drives the UI icon: Gladys maps level-sensor icons per TYPE, and
+      // the generic sensor/integer type has no entry, so it rendered with
+      // no icon at all. liquid-level-percent shows the droplet.
+      type: DEVICE_FEATURE_TYPES.LEVEL_SENSOR.LIQUID_LEVEL_PERCENT,
+      unit: DEVICE_FEATURE_UNITS.PERCENT,
+      min: 0,
+      max: 100,
+      read_only: true,
+      has_feedback: false,
+      keep_history: true, // draw the consumption curve over time
+    })),
   ];
 
   return {

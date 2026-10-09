@@ -84,7 +84,8 @@ test('state label and color follow the printer state', () => {
   assert.equal(stateLabel(printing, 'fr'), 'Impression');
   assert.equal(stateColor(printing), WIDGET_COLORS.INFO);
   const stopped = { state: 'stopped', stateReasons: ['media-empty'] };
-  assert.equal(stateLabel(stopped, 'fr'), 'Arrêtée (media-empty)');
+  assert.equal(stateLabel(stopped, 'fr'), 'Arrêtée (plus de papier)');
+  assert.equal(stateLabel(stopped, 'en'), 'Stopped (out of paper)');
   assert.equal(stateLabel(stopped, 'en', { withReasons: false }), 'Stopped');
   assert.equal(stateColor(stopped), WIDGET_COLORS.DANGER);
   const warned = { state: 'idle', stateReasons: ['marker-supply-low'] };
@@ -144,7 +145,7 @@ test('printer widget: heading, live gauges, status rows, check button', () => {
   assert.equal(content.components.length, 1 + gauges.length + 2);
 });
 
-test('printer widget: the lowest levels win when a printer has more than 5 supplies', () => {
+test('printer widget: more than 5 cartridges, the 5 lowest in the printer order', () => {
   const { device, snapshot } = inkjet();
   const markers = Array.from({ length: 9 }, (_, i) => ({
     key: `supply-${i}`,
@@ -161,11 +162,11 @@ test('printer widget: the lowest levels win when a printer has more than 5 suppl
   assert.equal(gauges.length, 5);
   assert.deepEqual(
     gauges.map((g) => g.value),
-    [10, 20, 30, 40, 50],
+    [50, 40, 30, 20, 10],
   );
   // Not published on the created device: inline gauges, 0-100 %.
   assert.ok(gauges.every((g) => g.min === 0 && g.max === 100 && g.unit === '%'));
-  assert.equal(gauges[0].color, WIDGET_COLORS.WARNING);
+  assert.equal(gauges[4].color, WIDGET_COLORS.WARNING);
   const content = buildPrinterContent({
     device,
     snapshot: many,
@@ -194,7 +195,7 @@ test('printer widget: unknown levels are skipped, a stopped printer is red', () 
   const gauges = content.components.filter((c) => c.type === 'gauge');
   assert.equal(gauges.length, stopped.markers.filter((m) => m.percent !== null).length);
   const status = content.components.find((c) => c.type === 'status');
-  assert.equal(status.items[0].value, 'Stopped (media-empty)');
+  assert.equal(status.items[0].value, 'Stopped (out of paper)');
   assert.equal(status.items[0].color, WIDGET_COLORS.DANGER);
 });
 
@@ -378,5 +379,239 @@ test('no widget content ever uses the primary style (invisible in dark mode)', (
       assert.notEqual(component.style, 'primary');
       assert.notEqual(component.color, 'primary');
     }
+  }
+});
+
+// --- No cartridge pushed out by a part (forum feedback, 1.2.0) ----------------
+
+/** A supply as parsePrinter / the SNMP complement give it. */
+const supply = (key, name, type, percent, source) => ({
+  key,
+  name,
+  type,
+  color: null,
+  percent,
+  rawLevel: percent,
+  ...(source ? { source } : {}),
+});
+
+/** A created device for these supplies, plus its snapshot. */
+function printerWith(markers, { lang = 'fr', reasons = [] } = {}) {
+  const gladys = createFakeGladys();
+  const printer = { ...parsePrinter(COLOR_INKJET_ATTRIBUTES), markers, stateReasons: reasons };
+  const device = buildPrinterDevice(gladys, { printer, url: URL }, { feature_names: lang });
+  const snapshot = {
+    state: 'idle',
+    stateReasons: reasons,
+    stateText: 'idle',
+    markers,
+    at: NOW - 60_000,
+  };
+  return { device, snapshot };
+}
+
+// HP Color Laser MFP 178nw: 4 IPP toners, 3 SNMP parts.
+const HP_178NW = [
+  supply('black-toner', 'Black Toner', 'toner', 40),
+  supply('cyan-toner', 'Cyan Toner', 'toner', 10),
+  supply('magenta-toner', 'Magenta Toner', 'toner', 80),
+  supply('yellow-toner', 'Yellow Toner', 'toner', 70),
+  supply('transfer-belt', 'Transfer Belt', 'transfer-unit', 92, 'snmp'),
+  supply('fuser-unit', 'Fuser Unit', 'fuser', 92, 'snmp'),
+  supply('pickup-roller', 'Pickup Roller', 'other', 97, 'snmp'),
+];
+
+test('printer widget: a color laser keeps its 4 toners, the parts go to the list', () => {
+  const { device, snapshot } = printerWith(HP_178NW);
+  const content = buildPrinterContent({
+    device,
+    snapshot,
+    language: 'fr',
+    featureNames: 'fr',
+    now: NOW,
+  });
+  assert.deepEqual(validateWidgetContent(content), []);
+  const gauges = content.components.filter((c) => c.type === 'gauge');
+  // The 4 toners in the printer order, then the lowest part.
+  assert.deepEqual(
+    gauges.map((g) => g.label),
+    ['Noir', 'Cyan', 'Magenta', 'Jaune', 'Transfert'],
+  );
+  // All on the created device: live gauges.
+  assert.ok(gauges.every((g) => g.device_feature?.includes(':marker:')));
+  const status = content.components.find((c) => c.type === 'status');
+  assert.deepEqual(
+    status.items.map((i) => [i.label.fr ?? i.label, i.value]),
+    [
+      ['État', 'Prête'],
+      ['Dernier relevé', status.items[1].value],
+      ['Niveau le plus bas', 'Cyan · 10 %'],
+      ['Four', '92 %'],
+      ['Rouleau prise', '97 %'],
+    ],
+  );
+  assert.equal(status.items[3].color, WIDGET_COLORS.SUCCESS);
+});
+
+test('printer widget: up to 5 known levels, the printer order is kept', () => {
+  const { device, snapshot } = printerWith([
+    supply('drum', 'Drum Unit', 'opc', 15),
+    supply('black-toner', 'Black Toner', 'toner', 60),
+  ]);
+  const gauges = printerGauges(device, snapshot, 'fr');
+  assert.deepEqual(
+    gauges.map((g) => g.label),
+    ['Tambour', 'Noir'],
+  );
+  const content = buildPrinterContent({ device, snapshot, language: 'fr', featureNames: 'fr' });
+  assert.equal(content.components.find((c) => c.type === 'status').items.length, 3);
+});
+
+test('printer widget: the Samsung rollers get distinct gauges and feature names', () => {
+  const markers = [
+    supply('black-toner', 'Black Toner', 'toner', 60),
+    supply('imaging-unit', 'Imaging Unit', 'opc', 10, 'snmp'),
+    supply('transfer-roller', 'Transfer Roller', 'transfer-unit', 80, 'snmp'),
+    supply('tray1-pickup-roller', 'Tray1 Pickup Roller', 'other', 85, 'snmp'),
+    supply('mp-pickup-roller', 'MP Pickup Roller', 'other', 85, 'snmp'),
+  ];
+  const { device, snapshot } = printerWith(markers);
+  const gauges = printerGauges(device, snapshot, 'fr');
+  assert.deepEqual(
+    gauges.map((g) => g.label),
+    ['Noir', 'Tambour', 'Transfert', 'Rouleau prise bac 1', 'Rouleau prise bac MF'],
+  );
+  assert.deepEqual(
+    device.features.filter((f) => f.external_id.includes(':marker:')).map((f) => f.name),
+    [
+      'Toner noir',
+      "Unité d'imagerie",
+      'Unité de transfert',
+      'Rouleau de prise papier (bac 1)',
+      'Rouleau de prise papier (bac multifonction)',
+    ],
+  );
+
+  // Unknown raw names that both read "Roller": numbered on the tiles too.
+  const same = printerWith([
+    supply('black-toner', 'Black Toner', 'toner', 60),
+    supply('roller', 'Roller', 'other', 85, 'snmp'),
+    supply('roller-2', 'Roller', 'other', 85, 'snmp'),
+  ]);
+  assert.deepEqual(
+    printerGauges(same.device, same.snapshot, 'fr').map((g) => g.label),
+    ['Noir', 'Rouleau 1', 'Rouleau 2'],
+  );
+});
+
+test('printer widget: more than 5 cartridges leave no gauge to the parts', () => {
+  const inks = ['Black', 'Photo Black', 'Cyan', 'Magenta', 'Yellow', 'Gray'].map((name, i) =>
+    supply(name.toLowerCase(), `${name} Ink`, 'ink-cartridge', 30 + i * 10),
+  );
+  const markers = [...inks, supply('waste', 'Maintenance Box', 'waste-ink', 5, 'snmp')];
+  const { device, snapshot } = printerWith(markers);
+  const content = buildPrinterContent({ device, snapshot, language: 'fr', featureNames: 'fr' });
+  assert.deepEqual(validateWidgetContent(content), []);
+  assert.deepEqual(
+    content.components.filter((c) => c.type === 'gauge').map((g) => g.label),
+    ['Noir', 'Noir photo', 'Cyan', 'Magenta', 'Jaune'],
+  );
+  const status = content.components.find((c) => c.type === 'status');
+  assert.deepEqual(
+    status.items.slice(2).map((i) => [i.label.fr ?? i.label, i.value]),
+    [
+      ['Niveau le plus bas', 'Récupérateur · 5 %'],
+      ['Récupérateur', '5 %'],
+      ['Gris', '80 %'],
+    ],
+  );
+});
+
+test('printer widget: the status list stops at 10 rows', () => {
+  const markers = [
+    ...['Black', 'Cyan', 'Magenta', 'Yellow'].map((name) =>
+      supply(name.toLowerCase(), `${name} Toner`, 'toner', 50),
+    ),
+    ...Array.from({ length: 12 }, (_, i) =>
+      supply(`fuser-${i}`, `Fuser ${i}`, 'fuser', 20 + i, 'snmp'),
+    ),
+  ];
+  const { device, snapshot } = printerWith(markers);
+  const content = buildPrinterContent({ device, snapshot, language: 'en', featureNames: 'en' });
+  assert.deepEqual(validateWidgetContent(content), []);
+  const status = content.components.find((c) => c.type === 'status');
+  assert.equal(status.items.length, 10);
+  // The lowest part has the 5th gauge; the next ones follow, lowest first.
+  assert.deepEqual(
+    status.items.slice(3).map((i) => i.value),
+    ['21 %', '22 %', '23 %', '24 %', '25 %', '26 %', '27 %'],
+  );
+});
+
+test('printer widget before the first reading: cartridges first', () => {
+  const { device } = printerWith(HP_178NW);
+  const reordered = {
+    ...device,
+    // Parts listed first on the device: the cartridges still come first.
+    features: [
+      ...device.features.filter((f) => !/toner/i.test(f.name)),
+      ...device.features.filter((f) => /toner/i.test(f.name)),
+    ],
+  };
+  const gauges = printerGauges(reordered, undefined, 'fr');
+  assert.deepEqual(
+    gauges.map((g) => g.label),
+    ['Toner noir', 'Toner cyan', 'Toner magenta', 'Toner jaune', 'Unité de transfert'],
+  );
+});
+
+test('printer widget: printer mode keeps the raw names', () => {
+  const { device, snapshot } = printerWith(HP_178NW, { lang: 'printer' });
+  assert.deepEqual(
+    printerGauges(device, snapshot, 'printer').map((g) => g.label),
+    ['Black Toner', 'Cyan Toner', 'Magenta Toner', 'Yellow Toner', 'Transfer Belt'],
+  );
+  const content = buildPrinterContent({
+    device,
+    snapshot,
+    language: 'en',
+    featureNames: 'printer',
+  });
+  const status = content.components.find((c) => c.type === 'status');
+  assert.deepEqual(
+    status.items.slice(3).map((i) => i.label),
+    ['Fuser Unit', 'Pickup Roller'],
+  );
+});
+
+test('state reasons are translated, unknown ones kept as reported', () => {
+  const label = (reasons, lang) => stateLabel({ state: 'idle', stateReasons: reasons }, lang);
+  assert.equal(label(['toner-low'], 'fr'), 'Prête (toner bas)');
+  assert.equal(label(['toner-low'], 'en'), 'Idle (toner low)');
+  assert.equal(label(['marker-supply-low'], 'fr'), 'Prête (consommable bas)');
+  assert.equal(label(['marker-waste-almost-full'], 'fr'), 'Prête (récupérateur presque plein)');
+  assert.equal(label(['media-jam', 'cover-open'], 'fr'), 'Prête (bourrage papier, capot ouvert)');
+  assert.equal(label(['door-open'], 'en'), 'Idle (door open)');
+  assert.equal(label(['some-vendor-reason'], 'fr'), 'Prête (some-vendor-reason)');
+  for (const reason of [
+    'toner-low',
+    'marker-supply-low',
+    'toner-empty',
+    'marker-supply-empty',
+    'media-empty',
+    'media-jam',
+    'media-needed',
+    'door-open',
+    'cover-open',
+    'offline',
+    'paused',
+    'marker-waste-almost-full',
+    'marker-waste-full',
+  ]) {
+    const fr = stateLabel({ state: 'stopped', stateReasons: [reason] }, 'fr');
+    assert.notEqual(fr, `Arrêtée (${reason})`, reason);
+    const en = stateLabel({ state: 'stopped', stateReasons: [reason] }, 'en');
+    assert.doesNotMatch(en, /-/, reason);
+    assert.ok(fr.length <= 40 && en.length <= 40, fr);
   }
 });

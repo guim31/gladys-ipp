@@ -81,8 +81,12 @@ editor (under "IPP Printers").
   printer to show (leave empty for the first one added to Gladys). The gauges
   are bound to the device sensors: they follow the levels live, without
   waiting for the widget refresh. Limits: at most **5 gauges** (the dashboard
-  caps a widget at 8 elements); beyond that, the lowest levels come first.
-  Gauges are green from 25 %, orange below, red under 10 %.
+  caps a widget at 8 elements); beyond that, the cartridges (ink, toner)
+  come first, in the printer order, then the parts (drum, fuser, belt,
+  rollers…), the lowest first. No supply goes missing: the ones without a
+  gauge are listed under the state, the lowest first ("Fuser 92 %"). Gauges
+  are green from 25 %, orange below, red under 10 %. The common state
+  reasons are made readable ("Idle (toner low)").
 - **Supplies**: every printer in one list, the most critical first — for
   each, the state and the lowest supply ("Idle · Black 12 %"), colored by
   level (red under 10 %, orange under 25 %) — and the number of printers "to
@@ -93,8 +97,10 @@ the state, at the configured interval for the levels): they never query the
 printer themselves, except through the **Check** button. Until a printer has
 answered since the integration started, its state reads "Waiting for the
 first reading". The short supply names follow the **Sensor names** setting
-("Black", "Cyan", "Drum"… in English; the raw name reported by the printer
-otherwise).
+("Black", "Cyan", "Drum", "Pickup roller tray 1"… in English; the raw name
+reported by the printer otherwise). Two supplies of one printer never share
+a name: without a recognized qualifier, the raw printer name or a number
+("Roller 1", "Roller 2") tells them apart.
 
 ## Troubleshooting
 

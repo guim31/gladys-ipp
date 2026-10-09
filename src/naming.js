@@ -55,6 +55,9 @@ export function displayMarkerName(marker, lang) {
   // cartridge rule below ("Black Drum Unit" became "Encre noire"). Feature
   // names are frozen at creation, so this only names NEW features right.
   const part = findPart(marker, haystack);
+  if (part?.id === 'roller') {
+    return rollerName(haystack, lang, 'long');
+  }
   if (part) {
     if (!color) {
       return part[`long${lang === 'fr' ? 'Fr' : 'En'}`];
@@ -126,6 +129,9 @@ export function shortMarkerName(marker, lang) {
     return lang === 'fr' ? 'Récupérateur' : 'Waste';
   }
   const part = findPart(marker, haystack);
+  if (part?.id === 'roller') {
+    return rollerName(haystack, lang, 'short');
+  }
   if (part) {
     if (!colorName) {
       return part[lang];
@@ -205,6 +211,93 @@ const PARTS = [
   },
 ];
 
+// What a roller does, from its raw name. A laser lists several rollers in
+// its SNMP table (pickup, separation...) that would all be "Rouleau".
+// "Transfer Roller" never gets here: the transfer part matches first.
+const ROLLER_KINDS = [
+  {
+    match: /pick[ _-]?up|prise/,
+    en: 'Pickup',
+    fr: 'prise',
+    longEn: 'Pickup roller',
+    longFr: 'Rouleau de prise papier',
+  },
+  {
+    match: /retard|s[ée]paration/,
+    en: 'Separation',
+    fr: 'séparation',
+    longEn: 'Separation roller',
+    longFr: 'Rouleau de séparation',
+  },
+  {
+    match: /feed|entra[iî]nement/,
+    en: 'Feed',
+    fr: 'entraînement',
+    longEn: 'Feed roller',
+    longFr: "Rouleau d'entraînement",
+  },
+];
+
+/**
+ * The paper tray a supply belongs to, from its raw name: "Tray1", "Tray 2",
+ * "Cassette 1", or the multipurpose / manual / bypass tray ("MP", "MPT").
+ * @param {string} haystack lowercased "name type"
+ * @returns {{ en: string, fr: string, longEn: string, longFr: string }|null}
+ */
+function trayOf(haystack) {
+  const numbered = /(?:tray|bac|cassette)[ _-]?(\d+)/.exec(haystack);
+  if (numbered) {
+    const n = numbered[1];
+    return { en: `tray ${n}`, fr: `bac ${n}`, longEn: `tray ${n}`, longFr: `bac ${n}` };
+  }
+  if (/\bmpt?\b|multi[ _-]?purpose|multifonction|manual|bypass/.test(haystack)) {
+    return {
+      en: 'MP tray',
+      fr: 'bac MF',
+      longEn: 'multipurpose tray',
+      longFr: 'bac multifonction',
+    };
+  }
+  return null;
+}
+
+/**
+ * Name of a roller with its qualifiers: "Rouleau prise bac 1" on a tile,
+ * "Rouleau de prise papier (bac 1)" as a feature name. A tile label that
+ * would pass 24 characters drops the word "roller" ("Séparation bac MF").
+ * @param {string} haystack lowercased "name type"
+ * @param {'fr'|'en'} lang
+ * @param {'short'|'long'} form
+ * @returns {string}
+ */
+function rollerName(haystack, lang, form) {
+  const kind = ROLLER_KINDS.find((k) => k.match.test(haystack));
+  const tray = trayOf(haystack);
+  if (form === 'long') {
+    const base = kind
+      ? kind[lang === 'fr' ? 'longFr' : 'longEn']
+      : lang === 'fr'
+        ? 'Rouleau'
+        : 'Roller';
+    return tray ? `${base} (${tray[lang === 'fr' ? 'longFr' : 'longEn']})` : base;
+  }
+  const words = lang === 'fr' ? [kind?.fr, tray?.fr] : [kind?.en, tray?.en];
+  const qualifier = words.filter(Boolean).join(' ');
+  if (!qualifier) {
+    return lang === 'fr' ? 'Rouleau' : 'Roller';
+  }
+  const full =
+    lang === 'fr'
+      ? `Rouleau ${qualifier}`
+      : kind
+        ? `${kind.en} roller${tray ? ` ${tray.en}` : ''}`
+        : `Roller ${tray.en}`;
+  if (full.length <= 24) {
+    return full;
+  }
+  return fitLabel(qualifier.charAt(0).toUpperCase() + qualifier.slice(1));
+}
+
 // Supply types (IPP marker-types and their SNMP equivalents, see
 // SUPPLY_TYPES in snmp/supplies.js) that ARE cartridges: never a part, even
 // when the name mentions one ("Toner/Drum kit" stays a toner).
@@ -258,4 +351,108 @@ export function markerPart(marker) {
 function fitLabel(name) {
   const cleaned = name.replace(/[_ ]*s\/n.*$/i, '').trim() || name;
   return cleaned.length <= 24 ? cleaned : `${cleaned.slice(0, 23)}…`;
+}
+
+/**
+ * Raw supply name without a serial-number tail, uncut.
+ * @param {string} name
+ * @returns {string}
+ */
+function cleanRawName(name) {
+  const raw = String(name ?? '').trim();
+  return raw.replace(/[_ ]*s\/n.*$/i, '').trim() || raw;
+}
+
+/**
+ * Indexes of the names shared by several entries (case-insensitive), one
+ * group per name, in the order of the list.
+ * @param {string[]} names
+ * @returns {number[][]}
+ */
+function sameNameGroups(names) {
+  const groups = new Map();
+  names.forEach((name, index) => {
+    const id = name.toLowerCase();
+    groups.set(id, [...(groups.get(id) ?? []), index]);
+  });
+  return [...groups.values()].filter((indexes) => indexes.length > 1);
+}
+
+/**
+ * "Rouleau" -> "Rouleau 2", cut so that the whole stays within `max`.
+ * @param {string} name
+ * @param {number} rank
+ * @param {number} max
+ * @returns {string}
+ */
+function numbered(name, rank, max) {
+  const suffix = ` ${rank}`;
+  const room = max - suffix.length;
+  const base = name.length <= room ? name : `${name.slice(0, room - 1)}…`;
+  return `${base}${suffix}`;
+}
+
+/**
+ * Tell apart the supplies of ONE printer that end up with the same name
+ * (two SNMP rollers both "Rouleau"): with their cleaned raw names when
+ * those differ, else with a number in the printer order ("Rouleau 1",
+ * "Rouleau 2"). Deterministic for a given list of supplies; only names
+ * change, never keys nor external_ids.
+ * @param {Array<{ name: string }>} markers the supplies, in the printer order
+ * @param {string[]} names their names, aligned with `markers`
+ * @param {{ max: number, withRaw: (name: string, raw: string) => string }} options
+ *   `withRaw` builds the name that carries the raw one
+ * @returns {string[]} the names, aligned with `markers`
+ */
+function distinctNames(markers, names, { max, withRaw }) {
+  const result = [...names];
+  for (const indexes of sameNameGroups(names)) {
+    const raws = indexes.map((i) => cleanRawName(markers[i].name));
+    const candidates = indexes.map((i, n) => withRaw(names[i], raws[n]));
+    const usable =
+      indexes.every((i, n) => raws[n].toLowerCase() !== names[i].toLowerCase()) &&
+      new Set(candidates.map((c) => c.toLowerCase())).size === candidates.length;
+    indexes.forEach((i, n) => {
+      result[i] = usable ? candidates[n] : numbered(names[i], n + 1, max);
+    });
+  }
+  // A raw name may land on the name of another supply: number what still
+  // collides (never seen, but a duplicate name would be frozen for good).
+  for (const indexes of sameNameGroups(result)) {
+    indexes.forEach((i, n) => {
+      result[i] = numbered(result[i], n + 1, max);
+    });
+  }
+  return result;
+}
+
+/**
+ * Feature names of the supplies of one printer (displayMarkerName), made
+ * distinct: "Rouleau (Roller A)", "Rouleau (Roller B)", or "Rouleau 1",
+ * "Rouleau 2" when the raw names are the same.
+ * @param {Array<{ name: string, type: string|null }>} markers in the printer order
+ * @param {'printer'|'fr'|'en'} lang
+ * @returns {string[]} aligned with `markers`
+ */
+export function displayMarkerNames(markers, lang) {
+  return distinctNames(
+    markers,
+    markers.map((marker) => displayMarkerName(marker, lang)),
+    { max: Infinity, withRaw: (name, raw) => `${name} (${raw})` },
+  );
+}
+
+/**
+ * Widget labels of the supplies of one printer (shortMarkerName, ≤ 24),
+ * made distinct the same way: the shortened raw name, else a number.
+ * @param {Array<{ name: string, type: string|null }>} markers in the printer order
+ * @param {'printer'|'fr'|'en'} lang
+ * @returns {string[]} aligned with `markers`
+ */
+export function shortMarkerNames(markers, lang) {
+  return distinctNames(
+    markers,
+    markers.map((marker) => shortMarkerName(marker, lang)),
+    { max: 24, withRaw: (_name, raw) => fitLabel(raw) },
+  );
 }
