@@ -11,20 +11,34 @@ import {
   DEVICE_POLL_FREQUENCY_MS,
   isPrinterDevice,
   platformIdFor,
-  pollPrinter,
+  pollPrinter as pollPrinterReal,
   getPrinterSnapshot,
   PRINTER_URL_PARAM,
   resetPollThrottle,
 } from '../src/device.js';
-import { discoverPrinters, isIppServiceEntry, mdnsCandidateUrl } from '../src/discovery.js';
+import {
+  discoverPrinters as discoverPrintersReal,
+  isIppServiceEntry,
+  mdnsCandidateUrl,
+} from '../src/discovery.js';
 import { parsePrinter } from '../src/printer.js';
 import { normalizeConfig } from '../src/config.js';
 import { createFakeGladys } from './helpers/fakeGladys.js';
 import { COLOR_INKJET_ATTRIBUTES } from './helpers/ippFixtures.js';
 import { buildMarkers } from '../src/printer.js';
+import { resetSupplyFallback, withFallbackSupplies } from '../src/supplies.js';
 
 const config = normalizeConfig();
 const URL_UNDER_TEST = 'http://192.168.1.20:631/ipp/print';
+
+// The SNMP complement now runs even when IPP announces supplies: without a
+// stub, every poll below would send a real datagram to URL_UNDER_TEST. Tests
+// that exercise SNMP pass their own fallbackSupplies.
+const noSnmp = async (printer) => printer;
+const pollPrinter = (gladys, device, cfg, deps = {}) =>
+  pollPrinterReal(gladys, device, cfg, { fallbackSupplies: noSnmp, ...deps });
+const discoverPrinters = (gladys, cfg, deps = {}) =>
+  discoverPrintersReal(gladys, cfg, { fallbackSupplies: noSnmp, ...deps });
 
 function probedInkjet() {
   return { printer: parsePrinter(COLOR_INKJET_ATTRIBUTES), url: URL_UNDER_TEST };
@@ -477,6 +491,55 @@ test('pollPrinter publishes the device when SNMP reveals supplies IPP never anno
     'the new cartridge feature must be published before its state',
   );
   assert.equal(gladys.discoveredDevices[0].features.length, 2);
+});
+
+test('pollPrinter re-publishes an existing device when the SNMP complement adds a part', async () => {
+  resetPollThrottle();
+  resetSupplyFallback();
+  const gladys = createFakeGladys();
+  const frConfig = normalizeConfig({ feature_names: 'fr' });
+  const tonerOnly = {
+    'printer-uuid': 'urn:uuid:00000000-0000-0000-0000-000000000070',
+    'printer-make-and-model': 'Samsung M2070 Series',
+    'printer-state': 3,
+    'marker-names': 'Black Toner_S/N_:CRUM-00000000000',
+    'marker-types': 'toner',
+    'marker-levels': 70,
+  };
+  // A device created by v1.1.0: state + toner.
+  const device = buildPrinterDevice(
+    gladys,
+    { printer: parsePrinter(tonerOnly), url: URL_UNDER_TEST },
+    frConfig,
+  );
+  assert.equal(device.features.length, 2);
+
+  await pollPrinter(gladys, device, frConfig, {
+    fetchAttributes: async () => tonerOnly,
+    fallbackSupplies: (printer, url) =>
+      withFallbackSupplies(printer, url, {
+        readSupplies: async () => [
+          { name: 'Black Toner', color: null, type: 'toner', level: 70, high: 100 },
+          { name: 'Imaging Unit', color: null, type: 'opc', level: 2400, high: 30000 },
+        ],
+      }),
+  });
+
+  assert.equal(gladys.discoveredDevices.length, 1, 'published again -> "Update" in Discovery');
+  const republished = gladys.discoveredDevices[0].features;
+  assert.deepEqual(
+    republished.slice(0, 2).map((f) => f.external_id),
+    device.features.map((f) => f.external_id),
+    'the existing features keep their ids',
+  );
+  assert.equal(republished.length, 3);
+  assert.match(republished[2].external_id, /:marker:imaging-unit$/);
+  assert.equal(republished[2].name, "Unité d'imagerie");
+  assert.ok(
+    gladys.published.some(
+      (p) => p.featureExternalId === republished[2].external_id && p.state === 8,
+    ),
+  );
 });
 
 // --- Snapshots for the dashboard widgets ------------------------------------

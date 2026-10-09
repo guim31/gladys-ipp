@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { displayMarkerName, displayStateName, shortMarkerName } from '../src/naming.js';
+import { displayMarkerName, displayStateName, markerPart, shortMarkerName } from '../src/naming.js';
 import { buildPrinterDevice } from '../src/device.js';
 import { parsePrinter } from '../src/printer.js';
 import { normalizeConfig } from '../src/config.js';
@@ -79,6 +79,52 @@ test('the language changes the names but NEVER the external_ids', () => {
     fr.features.map((f) => f.name),
     ['État', 'Encre noire', 'Encre cyan', 'Encre magenta', 'Encre jaune'],
   );
+});
+
+test('printer parts get their own name, no longer "Encre noire"', () => {
+  assert.equal(displayMarkerName(marker('Black Drum Unit', 'opc'), 'fr'), 'Tambour noir');
+  assert.equal(displayMarkerName(marker('Black Drum Unit', 'opc'), 'en'), 'Black drum');
+  assert.equal(displayMarkerName(marker('Drum Unit', null), 'fr'), 'Tambour');
+  assert.equal(displayMarkerName(marker('Imaging Unit', 'opc'), 'fr'), "Unité d'imagerie");
+  assert.equal(displayMarkerName(marker('Imaging Unit', 'opc'), 'en'), 'Imaging unit');
+  assert.equal(
+    displayMarkerName(marker('Cyan Imaging Unit', 'opc'), 'fr'),
+    "Unité d'imagerie cyan",
+  );
+  assert.equal(
+    displayMarkerName(marker('Black Imaging Unit', 'opc'), 'fr'),
+    "Unité d'imagerie noire",
+  );
+  assert.equal(displayMarkerName(marker('Fuser Kit', 'fuser'), 'en'), 'Fuser');
+  assert.equal(
+    displayMarkerName(marker('Transfer Belt', 'transfer-unit'), 'fr'),
+    'Unité de transfert',
+  );
+  assert.equal(displayMarkerName(marker('Developer Unit', 'developer'), 'fr'), 'Développeur');
+});
+
+test('cartridges keep their rule, even when the name mentions a part', () => {
+  assert.equal(displayMarkerName(marker('Black Toner', 'toner'), 'fr'), 'Toner noir');
+  assert.equal(displayMarkerName(marker('Black Toner/Drum', 'toner'), 'fr'), 'Toner noir');
+  assert.equal(displayMarkerName(marker('black cartridge'), 'fr'), 'Encre noire');
+  assert.equal(shortMarkerName({ name: 'Black Toner/Drum', type: 'toner' }, 'fr'), 'Noir');
+});
+
+test('markerPart identifies the part across sources, never a cartridge', () => {
+  assert.equal(markerPart({ name: 'Imaging Unit', type: 'opc' }), 'drum');
+  assert.equal(markerPart({ name: 'Drum', type: null }), 'drum');
+  assert.equal(markerPart({ name: 'Supply 2', type: 'opc' }), 'drum');
+  assert.equal(markerPart({ name: 'Toner Collection Unit', type: 'waste-toner' }), 'waste');
+  assert.equal(markerPart({ name: 'Maintenance Box', type: null }), 'waste');
+  assert.equal(markerPart({ name: 'Fuser Kit', type: null }), 'fuser');
+  assert.equal(markerPart({ name: 'Black Toner', type: 'toner' }), null);
+  assert.equal(markerPart({ name: 'Toner/Drum kit', type: 'toner' }), null);
+  assert.equal(markerPart({ name: 'Staple Cartridge', type: null }), null);
+});
+
+test('shortMarkerName: an imaging unit is a drum on a tile', () => {
+  assert.equal(shortMarkerName({ name: 'Imaging Unit', type: 'opc' }, 'fr'), 'Tambour');
+  assert.equal(shortMarkerName({ name: 'Imaging Unit', type: 'opc' }, 'en'), 'Drum');
 });
 
 // --- Short names for the widget tiles ----------------------------------------

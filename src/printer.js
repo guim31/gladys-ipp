@@ -103,11 +103,14 @@ function supplyRows(attributes) {
  * source (IPP marker-*, IPP printer-supply, or the SNMP Printer MIB).
  * @param {Array<{ name?: string, color?: string|null, type?: string|null,
  *                 level?: unknown, high?: unknown }>} rows
+ * @param {{ takenKeys?: Iterable<string> }} [options]
  * @returns {Array<{ key: string, name: string, color: string|null,
  *                   type: string|null, percent: number|null, rawLevel: number|null }>}
  */
-export function buildMarkers(rows) {
-  const usedKeys = new Set();
+export function buildMarkers(rows, { takenKeys = [] } = {}) {
+  // `takenKeys`: keys already used by other markers of the same printer (the
+  // IPP ones when the SNMP complement appends its parts), never reused.
+  const usedKeys = new Set(takenKeys);
   return rows.map((row, i) => {
     const name = row.name != null && row.name !== '' ? String(row.name) : `Cartridge ${i + 1}`;
     // Feature keys derive from the supply NAME (stable across reboots and

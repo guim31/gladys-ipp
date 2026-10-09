@@ -110,8 +110,9 @@ export async function discoverPrinters(gladys, config, deps = {}) {
   for (const target of targets) {
     try {
       const { url, attributes } = await probe(target);
-      // A printer announcing no supply over IPP gets one SNMP chance here, so
-      // its cartridges exist as features from the very first discovery.
+      // SNMP gets one chance here — every supply when IPP announces none,
+      // the missing parts (drum, fuser...) otherwise — so they exist as
+      // features from the very first discovery.
       const printer = await fallbackSupplies(parsePrinter(attributes), url);
       const platformId = platformIdFor(printer, url);
       if (seenIds.has(platformId)) {

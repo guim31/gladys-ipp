@@ -69,6 +69,27 @@ export function noSupplyDiagnostic(attributes) {
   };
 }
 
+/**
+ * Where the supplies of the test answer come from, for support: nothing for
+ * IPP alone, " (via SNMP)" for the fallback, " (+ SNMP: Imaging Unit)" naming
+ * the parts the SNMP complement added after the IPP ones.
+ * @param {{ supplySource?: string, markers: Array<{ name: string, source?: string }> }} printer
+ * @returns {{ en: string, fr: string }}
+ */
+export function supplySourceText(printer) {
+  if (printer.supplySource === 'snmp') {
+    return { en: ' (via SNMP)', fr: ' (via SNMP)' };
+  }
+  if (printer.supplySource === 'ipp+snmp') {
+    const names = printer.markers
+      .filter((m) => m.source === 'snmp')
+      .map((m) => m.name)
+      .join(', ');
+    return { en: ` (+ SNMP: ${names})`, fr: ` (+ SNMP : ${names})` };
+  }
+  return { en: '', fr: '' };
+}
+
 export const ACTIONS = {
   /**
    * Probe one printer typed by the user and report what it answers: the
@@ -90,18 +111,18 @@ export const ACTIONS = {
     const suppliesFr = formatSupplies(printer, 'fr');
     // Naming the source matters for support: "via SNMP" tells the user their
     // printer needs SNMP reachable, and tells us which path answered.
-    const via = printer.supplySource === 'snmp' ? ' (via SNMP)' : '';
+    const via = supplySourceText(printer);
 
     const noSupply = noSupplyDiagnostic(attributes);
 
     return {
       en:
         `Printer OK: ${model} — state "${printer.stateText}"` +
-        (suppliesEn ? ` — ${suppliesEn}${via}` : ` — ${noSupply.en}`) +
+        (suppliesEn ? ` — ${suppliesEn}${via.en}` : ` — ${noSupply.en}`) +
         ` (${url})`,
       fr:
         `Imprimante OK : ${model} — état « ${printer.stateText} »` +
-        (suppliesFr ? ` — ${suppliesFr}${via}` : ` — ${noSupply.fr}`) +
+        (suppliesFr ? ` — ${suppliesFr}${via.fr}` : ` — ${noSupply.fr}`) +
         ` (${url})`,
     };
   },

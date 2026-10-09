@@ -44,17 +44,50 @@ widgets attendent le test de Guilhem ou des testeurs du forum.
   au rendu. Règle retenue : `stopped` → `danger`, `printing` → `info`, `idle` sans raison →
   `success`, `idle` avec raison → `warning`, inconnu → `neutral`. Jamais de style ni de couleur
   `primary` (invisible en mode sombre), un test le vérifie.
+- **Complément SNMP** (`withFallbackSupplies` / `complementRows`, `supplies.js`) : quand IPP
+  annonce déjà des consommables, la table SNMP (Printer MIB) est lue aussi, aux mêmes moments
+  que le repli (découverte, `pollPrinter` quand les niveaux sont dus, bouton de test), et les
+  **pièces** manquantes sont ajoutées **après** les marqueurs IPP, qui ne bougent jamais (leurs
+  clés portent l'historique des appareils créés). `supplySource` vaut `snmp` (repli) ou
+  `ipp+snmp` (complément, marqueurs ajoutés marqués `source: 'snmp'`) ; le test l'affiche
+  (« (via SNMP) », « (+ SNMP : Imaging Unit) »). Règle de dédoublonnage, prudente (un doublon
+  serait figé à vie, une pièce ratée ne coûte qu'une jauge) :
+  - jamais une cartouche (`CARTRIDGE_TYPES` de `naming.js` : toner, ink, ink-cartridge,
+    toner-cartridge, ink-ribbon) ;
+  - un type pièce (`PART_TYPES` : opc, developer, fuser, transfer-unit, cleaner-unit,
+    waste-toner, waste-ink, fuser-oil, waste-water), ou un type inconnu/« other » dont le
+    **nom** est une pièce reconnue (`markerPart`, mêmes regex que les noms) ;
+  - ignorée si un marqueur IPP a le même type, est la même pièce par nom (`markerPart`), ou
+    porte déjà la même clé ; deux lignes SNMP de même clé : la première seulement.
+- **Discipline réseau SNMP**, assouplie par le complément : l'ancien principe « une imprimante
+  dont les niveaux marchent ne génère aucun paquet SNMP » ne tient plus. Toujours en unicast
+  vers l'hôte de l'imprimante, seulement quand les niveaux sont dus ; back-off par hôte de
+  `SNMP_RETRY_MS` (30 min) sans réponse, de `SNMP_IDLE_RETRY_MS` (6 h) quand l'imprimante
+  répond sans pièce à niveau connu à ajouter (cas d'une jet d'encre : quelques parcours de
+  table par jour). Une imprimante qui apporte une pièce est relue à chaque relevé de niveaux.
+  Le bouton de test ignore le back-off. Un échec SNMP n'est jamais fatal et ne retire rien ;
+  le relevé du widget perd seulement la jauge de la pièce jusqu'au relevé suivant réussi.
+- Les tests de `device.test.js` passent un `fallbackSupplies` neutre par défaut : sans lui,
+  chaque poll enverrait un vrai datagramme SNMP à l'adresse de test.
 - **Noms courts** (`shortMarkerName`, `naming.js`) pour les libellés de jauge (≤ 24) : la couleur
   seule pour une cartouche (« Noir », « Cyan »), la pièce sinon (« Tambour noir », « Four »,
   « Récupérateur ») ; en mode `printer` le nom brut, débarrassé d'un suffixe de numéro de série
-  et coupé à 24. `displayMarkerName` (noms des fonctionnalités) n'a pas été touché : il nomme
-  encore « Encre noire » un tambour noir, à corriger un jour pour les appareils neufs seulement
-  (les noms sont figés à la création).
+  et coupé à 24. Une « Imaging Unit » donne « Tambour » sur une tuile.
+- `displayMarkerName` (noms des fonctionnalités, fr/en) reconnaît les pièces depuis le
+  complément SNMP : « Unité d'imagerie », « Tambour noir », « Four », « Unité de
+  transfert »… au lieu de « Encre noire » pour un tambour noir. Ne vaut que pour les
+  fonctionnalités créées ensuite (noms figés à la création). Les cartouches (types de
+  `CARTRIDGE_TYPES`) gardent la règle « Toner noir » / « Encre noire », même si leur nom
+  mentionne une pièce.
 - « Première imprimante créée » (réglage `printer` vide) = la première du cache `printerDevices`,
   dans l'ordre que renvoie `gladys.getDevices()` ; un cache vide est relu une fois au rendu.
 - Le widget `supplies` n'a pas de réglage ; il liste au plus 10 imprimantes (limite des lignes
   `status`), les niveaux connus croissants, puis les imprimantes sans niveau, puis celles jamais
   relevées.
+
+Branche `feat/snmp-supply-complement` (demande du forum, testeur JPPUYB : unité d'imagerie
+d'une Samsung mono absente) : complément SNMP des pièces, voir ci-dessus. Non testé sur une
+vraie imprimante.
 
 ## Travailler sur ce dépôt
 
