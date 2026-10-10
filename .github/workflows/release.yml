@@ -101,8 +101,9 @@ jobs:
           git commit -m "chore(release): ${VERSION}"
           git tag -a "v${VERSION}" -m "Release ${VERSION}"
 
-          git push origin "HEAD:${GITHUB_REF_NAME}"
-          git push origin "v${VERSION}"
+          # One atomic push: pushing the tag right after the branch sometimes fails on
+          # GitHub ("missing necessary objects"), leaving a bumped main without its tag.
+          git push --atomic origin "HEAD:${GITHUB_REF_NAME}" "v${VERSION}"
 
   # Build and publish the image for the version we just tagged.
   build:
