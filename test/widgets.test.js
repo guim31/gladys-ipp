@@ -247,7 +247,7 @@ test('printer widget: empty states are a sentence, never an error', () => {
       text: {
         en: 'No printer yet: add one from the Discovery tab.',
         fr: "Aucune imprimante : ajoutez-en depuis l'onglet Découverte.",
-        de: 'Noch kein Drucker: Fügen Sie einen über den Tab Entdecken hinzu.',
+        de: 'Noch kein Drucker: Füge einen über den Tab Entdecken hinzu.',
         es: 'Aún no hay impresoras: añada una desde la pestaña Descubrir.',
       },
     },

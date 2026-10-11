@@ -113,7 +113,7 @@ testée sur une vraie imprimante.
   Chaque objet multilingue du manifeste et du code (widgets `TEXTS`, `ACTION_TEXTS`,
   `STATUS_TEXTS`, tables de `naming.js`) porte exactement ces quatre ; `test/i18n.test.js`
   échoue sinon, ou si un texte dépasse sa borne (tuile, bouton 24 ; ligne `status` 40 ;
-  description 100). `localeOf` rend une de ces quatre, l'anglais par défaut. Le réglage
+  description 100). `localeOf` rend une de ces quatre, l'anglais par défaut. L'allemand **tutoie** (« du », « Füge … hinzu »), comme les autres intégrations de Guilhem ; un test refuse « Sie » / « Ihr… » ; l'espagnol vouvoie (« usted »). Le réglage
   `feature_names` propose aussi `de` (« Toner Schwarz », couleur en nom après le type, sans
   accord) et `es` (« Tóner negro », « Tinta negra », accord comme en français). Pas de
   `docs/de.md` ni `docs/es.md` : l'indexeur du store ne relaie que `docs/en.md` et `docs/fr.md`

@@ -5,7 +5,7 @@
   "description": {
     "en": "Ink/toner levels and state of your network printers over IPP (AirPrint). Local, no cloud.",
     "fr": "Niveaux d'encre/toner et état de vos imprimantes réseau via IPP (AirPrint). Local, sans cloud.",
-    "de": "Tinten-/Tonerstände und Status Ihrer Netzwerkdrucker über IPP (AirPrint). Lokal, ohne Cloud.",
+    "de": "Tinten-/Tonerstände und Status deiner Netzwerkdrucker über IPP (AirPrint). Lokal, ohne Cloud.",
     "es": "Niveles de tinta/tóner y estado de sus impresoras de red por IPP (AirPrint). Local, sin nube."
   },
   "version": "1.2.1",
@@ -33,7 +33,7 @@
       "description": {
         "en": "Printers advertising IPP (any AirPrint-capable printer) are discovered automatically on your network. You can also list printers manually below — useful when mDNS does not reach them. Each printer exposes one sensor per supply (ink, toner, drum…), plus its state. Levels missing over IPP (all of them, or a laser's drum, fuser, belt and waste container) are read over SNMP, the way CUPS does.",
         "fr": "Les imprimantes annonçant IPP (toute imprimante compatible AirPrint) sont découvertes automatiquement sur votre réseau. Vous pouvez aussi les déclarer manuellement ci-dessous — utile quand le mDNS ne les atteint pas. Chaque imprimante expose un capteur par consommable (encre, toner, tambour…), plus son état. Les niveaux absents de l'IPP (tous, ou le tambour, le four, la courroie et le récupérateur d'une laser) sont lus en SNMP, comme le fait CUPS.",
-        "de": "Drucker, die IPP anbieten (jeder AirPrint-fähige Drucker), werden in Ihrem Netzwerk automatisch erkannt. Sie können Drucker unten auch manuell eintragen — nützlich, wenn mDNS sie nicht erreicht. Jeder Drucker stellt einen Sensor pro Verbrauchsmaterial (Tinte, Toner, Trommel…) sowie seinen Status bereit. Füllstände, die über IPP fehlen (alle oder bei einem Laserdrucker Trommel, Fixiereinheit, Transferband und Resttonerbehälter), werden wie bei CUPS über SNMP gelesen.",
+        "de": "Drucker, die IPP anbieten (jeder AirPrint-fähige Drucker), werden in deinem Netzwerk automatisch erkannt. Du kannst Drucker unten auch manuell eintragen — nützlich, wenn mDNS sie nicht erreicht. Jeder Drucker stellt einen Sensor pro Verbrauchsmaterial (Tinte, Toner, Trommel…) sowie seinen Status bereit. Füllstände, die über IPP fehlen (alle oder bei einem Laserdrucker Trommel, Fixiereinheit, Transferband und Resttonerbehälter), werden wie bei CUPS über SNMP gelesen.",
         "es": "Las impresoras que anuncian IPP (cualquier impresora compatible con AirPrint) se descubren automáticamente en su red. También puede declararlas manualmente a continuación — útil cuando el mDNS no las alcanza. Cada impresora expone un sensor por consumible (tinta, tóner, tambor…), además de su estado. Los niveles que faltan en IPP (todos, o el tambor, el fusor, la correa y el depósito de residuos de una láser) se leen por SNMP, como hace CUPS."
       },
       "links": [
@@ -77,7 +77,7 @@
       "description": {
         "en": "Applies to newly added devices. Printers report their supplies in their own words (usually English): keep them as-is, or translate the recognized cartridges.",
         "fr": "S'applique aux appareils nouvellement ajoutés. Les imprimantes annoncent leurs consommables dans leur propre langue (souvent l'anglais) : gardez-les tels quels, ou traduisez les cartouches reconnues.",
-        "de": "Gilt für neu hinzugefügte Geräte. Drucker melden ihre Verbrauchsmaterialien in ihren eigenen Worten (meist auf Englisch): Behalten Sie sie unverändert bei oder übersetzen Sie die erkannten Patronen.",
+        "de": "Gilt für neu hinzugefügte Geräte. Drucker melden ihre Verbrauchsmaterialien in ihren eigenen Worten (meist auf Englisch): Behalte sie unverändert bei oder übersetze die erkannten Patronen.",
         "es": "Se aplica a los dispositivos añadidos a partir de ahora. Las impresoras anuncian sus consumibles con sus propias palabras (normalmente en inglés): consérvelos tal cual o traduzca los cartuchos reconocidos."
       },
       "required": false,
@@ -142,7 +142,7 @@
       "description": {
         "en": "How often the ink/toner levels are recorded, in seconds. They move slowly: 900 s (15 min) is plenty. The printer state is watched continuously (sampled every 15 s) and updated as soon as it changes.",
         "fr": "Fréquence d'enregistrement des niveaux d'encre/toner, en secondes. Ils évoluent lentement : 900 s (15 min) suffisent largement. L'état de l'imprimante est surveillé en continu (échantillonné toutes les 15 s) et mis à jour dès qu'il change.",
-        "de": "Wie oft die Tinten-/Tonerstände aufgezeichnet werden, in Sekunden. Sie ändern sich langsam: 900 s (15 Min.) reichen völlig. Der Druckerstatus wird laufend überwacht (alle 15 s abgefragt) und sofort aktualisiert, wenn er sich ändert.",
+        "de": "Wie oft die Tinten-/Tonerstände aufgezeichnet werden, in Sekunden. Die Füllstände ändern sich langsam: 900 s (15 Min.) reichen völlig. Der Druckerstatus wird laufend überwacht (alle 15 s abgefragt) und sofort aktualisiert, wenn er sich ändert.",
         "es": "Frecuencia de registro de los niveles de tinta/tóner, en segundos. Cambian despacio: 900 s (15 min) es más que suficiente. El estado de la impresora se vigila de forma continua (muestreado cada 15 s) y se actualiza en cuanto cambia."
       },
       "required": false,

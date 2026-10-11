@@ -196,3 +196,49 @@ test('names: German and Spanish feature names and tiles are built and fit', () =
     assert.notEqual(displayStateName(lang), 'State');
   }
 });
+
+// German addresses the user informally ("du", like most of the Gladys
+// interface and every integration of the maintainer): no polite "Sie" nor
+// "Ihr…". Third-person plural "sie"/"ihr…" stays lowercase mid-sentence; a
+// capitalized one is rephrased rather than allowed.
+const POLITE = /\b(Sie|Ihr|Ihre|Ihren|Ihrem|Ihrer|Ihres)\b/;
+
+function germanTexts() {
+  const texts = multiLanguageObjects(manifest).map(({ path, value }) => [path, value.de]);
+  const tables = { WIDGET_TEXTS, STATUS_TEXTS };
+  for (const [name, table] of Object.entries(tables)) {
+    for (const { path, value } of multiLanguageObjects(table)) {
+      texts.push([`${name}${path.slice(1)}`, value.de]);
+    }
+  }
+  for (const [key, value] of Object.entries(ACTION_TEXTS)) {
+    texts.push([
+      `ACTION_TEXTS.${key}`,
+      typeof value.de === 'function' ? value.de('X', 'Y') : value.de,
+    ]);
+  }
+  for (const [key, text] of Object.entries(RAW_LEVEL_TEXT.de)) {
+    texts.push([`RAW_LEVEL_TEXT.de.${key}`, text]);
+  }
+  // The name tables hold keys like `id` that pass for a language code: walk
+  // them by hand.
+  const { colors, shortColors, waste, state, roller, parts, rollerKinds } = NAMING_TEXTS;
+  const names = [
+    ...colors.map((color) => color.de),
+    ...Object.values(shortColors).map((value) => value.de),
+    ...Object.values(waste).map((value) => value.de),
+    state.de,
+    roller.de,
+    ...[...parts, ...rollerKinds].flatMap((entry) => [entry.short.de, entry.long.de]),
+  ];
+  names.forEach((text, index) => texts.push([`NAMING_TEXTS[${index}]`, text]));
+  return texts;
+}
+
+test('German says "du", never the polite "Sie"', () => {
+  const texts = germanTexts();
+  assert.ok(texts.length > 50, `only ${texts.length} German texts found`);
+  for (const [path, text] of texts) {
+    assert.doesNotMatch(text, POLITE, `${path}: "${text}"`);
+  }
+});

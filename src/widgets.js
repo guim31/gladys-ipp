@@ -59,13 +59,13 @@ const TEXTS = {
   noPrinter: {
     en: 'No printer yet: add one from the Discovery tab.',
     fr: "Aucune imprimante : ajoutez-en depuis l'onglet Découverte.",
-    de: 'Noch kein Drucker: Fügen Sie einen über den Tab Entdecken hinzu.',
+    de: 'Noch kein Drucker: Füge einen über den Tab Entdecken hinzu.',
     es: 'Aún no hay impresoras: añada una desde la pestaña Descubrir.',
   },
   missingPrinter: {
     en: 'This printer no longer exists: pick another one in the widget settings.',
     fr: "Cette imprimante n'existe plus : choisissez-en une autre dans les réglages du widget.",
-    de: 'Dieser Drucker existiert nicht mehr: Wählen Sie in den Widget-Einstellungen einen anderen.',
+    de: 'Dieser Drucker existiert nicht mehr: Wähle in den Widget-Einstellungen einen anderen.',
     es: 'Esta impresora ya no existe: elija otra en la configuración del widget.',
   },
   waiting: {
