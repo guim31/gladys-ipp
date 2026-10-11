@@ -9,6 +9,8 @@
 // rest of the code never has to deal with `undefined`.
 // -----------------------------------------------------------------------------
 
+import { NAME_LANGUAGES } from './naming.js';
+
 // Defaults: they MUST stay consistent with the `default` values declared in the
 // `config_schema` of the manifest.
 export const DEFAULT_CONFIG = {
@@ -18,7 +20,7 @@ export const DEFAULT_CONFIG = {
   // Seconds between two recordings of the ink/toner levels.
   poll_frequency: 900,
   // Language of the feature names: 'printer' keeps the raw names reported by
-  // the printer, 'fr'/'en' translate the recognized supplies.
+  // the printer, 'en'/'fr'/'de'/'es' translate the recognized supplies.
   feature_names: 'printer',
 };
 
@@ -33,7 +35,7 @@ export function normalizeConfig(raw = {}) {
     ...raw,
     printer_hosts: String(raw.printer_hosts ?? DEFAULT_CONFIG.printer_hosts),
     poll_frequency: Number.isFinite(pollFrequency) ? pollFrequency : DEFAULT_CONFIG.poll_frequency,
-    feature_names: ['printer', 'fr', 'en'].includes(raw.feature_names)
+    feature_names: ['printer', ...NAME_LANGUAGES].includes(raw.feature_names)
       ? raw.feature_names
       : DEFAULT_CONFIG.feature_names,
   };

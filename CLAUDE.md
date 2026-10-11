@@ -109,6 +109,15 @@ testée sur une vraie imprimante.
   fonctionnalités créées ensuite (noms figés à la création). Les cartouches (types de
   `CARTRIDGE_TYPES`) gardent la règle « Toner noir » / « Encre noire », même si leur nom
   mentionne une pièce.
+- **Langues** (depuis le 11/10/2026) : `en`, `fr`, `de`, `es`, celles de l'interface de Gladys.
+  Chaque objet multilingue du manifeste et du code (widgets `TEXTS`, `ACTION_TEXTS`,
+  `STATUS_TEXTS`, tables de `naming.js`) porte exactement ces quatre ; `test/i18n.test.js`
+  échoue sinon, ou si un texte dépasse sa borne (tuile, bouton 24 ; ligne `status` 40 ;
+  description 100). `localeOf` rend une de ces quatre, l'anglais par défaut. Le réglage
+  `feature_names` propose aussi `de` (« Toner Schwarz », couleur en nom après le type, sans
+  accord) et `es` (« Tóner negro », « Tinta negra », accord comme en français). Pas de
+  `docs/de.md` ni `docs/es.md` : l'indexeur du store ne relaie que `docs/en.md` et `docs/fr.md`
+  (`DOCS_LANGUAGES`) et le cœur se rabat sur l'anglais.
 - « Première imprimante créée » (réglage `printer` vide) = la première du cache `printerDevices`,
   dans l'ordre que renvoie `gladys.getDevices()` ; un cache vide est relu une fois au rendu.
 - Le widget `supplies` n'a pas de réglage ; il liste au plus 10 imprimantes (limite des lignes

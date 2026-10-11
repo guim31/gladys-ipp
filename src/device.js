@@ -122,7 +122,7 @@ function deviceName(printer, url) {
 
 /**
  * Build the Gladys discovery payload for one probed printer.
- * Feature names follow config.feature_names ('printer' raw / 'fr' / 'en');
+ * Feature names follow config.feature_names ('printer' raw / 'en' / 'fr' / 'de' / 'es');
  * feature KEYS always derive from the raw printer names, so switching the
  * language never changes the external_ids nor loses history.
  * @param {object} gladys SDK instance

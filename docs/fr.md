@@ -58,8 +58,9 @@ appareil déjà ajouté, une pièce apparue ainsi se fait proposer par
    l'état est surveillé en continu (toutes les 15 s).
 4. Choisissez au besoin la langue des **noms des capteurs** : par défaut ce
    sont les noms bruts annoncés par l'imprimante (souvent en anglais, du type
-   « black cartridge ») ; en sélectionnant Français, les cartouches reconnues
-   deviennent « Encre noire », « Toner cyan »… Le réglage s'applique aux
+   « black cartridge ») ; en sélectionnant Français, Anglais, Allemand ou
+   Espagnol, les cartouches reconnues deviennent « Encre noire », « Black
+   ink », « Toner Schwarz », « Tóner cian »… Le réglage s'applique aux
    appareils **nouvellement ajoutés** — pour un appareil existant, renommez
    ses fonctionnalités depuis sa page, ou supprimez-le puis re-ajoutez-le
    (l'historique des anciennes fonctionnalités est alors perdu).

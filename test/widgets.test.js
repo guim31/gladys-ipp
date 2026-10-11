@@ -56,6 +56,9 @@ test('helpers: locale, fit, colors, lowest level', () => {
   assert.equal(localeOf('fr-FR'), 'fr');
   assert.equal(localeOf('en'), 'en');
   assert.equal(localeOf(undefined), 'en');
+  assert.equal(localeOf('de'), 'de');
+  assert.equal(localeOf('es-ES'), 'es');
+  assert.equal(localeOf('it'), 'en');
   assert.equal(fit('abc', 3), 'abc');
   assert.equal(fit('abcdef', 4), 'abc…');
   assert.equal(levelColor(null), WIDGET_COLORS.NEUTRAL);
@@ -244,6 +247,8 @@ test('printer widget: empty states are a sentence, never an error', () => {
       text: {
         en: 'No printer yet: add one from the Discovery tab.',
         fr: "Aucune imprimante : ajoutez-en depuis l'onglet Découverte.",
+        de: 'Noch kein Drucker: Fügen Sie einen über den Tab Entdecken hinzu.',
+        es: 'Aún no hay impresoras: añada una desde la pestaña Descubrir.',
       },
     },
   ]);
@@ -324,7 +329,12 @@ test('supplies widget: count to watch, rows most critical first, valid content',
   const tile = content.components.find((c) => c.type === 'value');
   assert.equal(tile.value, 2);
   assert.equal(tile.color, WIDGET_COLORS.WARNING);
-  assert.deepEqual(tile.label, { en: 'To watch', fr: 'À surveiller' });
+  assert.deepEqual(tile.label, {
+    en: 'To watch',
+    fr: 'À surveiller',
+    de: 'Zu beobachten',
+    es: 'A vigilar',
+  });
   const status = content.components.find((c) => c.type === 'status');
   assert.deepEqual(
     status.items.map((i) => i.label),
@@ -613,5 +623,30 @@ test('state reasons are translated, unknown ones kept as reported', () => {
     const en = stateLabel({ state: 'stopped', stateReasons: [reason] }, 'en');
     assert.doesNotMatch(en, /-/, reason);
     assert.ok(fr.length <= 40 && en.length <= 40, fr);
+  }
+});
+
+test('printer and supplies widgets render in German and Spanish', () => {
+  for (const lang of ['de', 'es']) {
+    const { device, snapshot } = inkjet({
+      lang,
+      overrides: { state: 'stopped', stateReasons: ['marker-waste-almost-full', 'media-jam'] },
+    });
+    const content = buildPrinterContent({
+      device,
+      snapshot: { ...snapshot, state: 'stopped', stateReasons: ['marker-waste-almost-full'] },
+      language: lang,
+      featureNames: lang,
+      now: NOW,
+    });
+    assert.deepEqual(validateWidgetContent(content), [], lang);
+    const status = content.components.find((c) => c.type === 'status');
+    assert.match(status.items[0].value, lang === 'de' ? /^Gestoppt \(/ : /^Detenida \(/);
+    const supplies = buildSuppliesContent({
+      printers: [{ device, snapshot }],
+      language: lang,
+      featureNames: lang,
+    });
+    assert.deepEqual(validateWidgetContent(supplies), [], lang);
   }
 });
