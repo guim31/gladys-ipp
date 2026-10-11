@@ -105,6 +105,8 @@ test('Samsung mono: the IPP toner stays intact, the SNMP imaging unit is added',
     assert.deepEqual(supplySourceText(result), {
       en: ' (+ SNMP: Imaging Unit)',
       fr: ' (+ SNMP : Imaging Unit)',
+      de: ' (+ SNMP: Imaging Unit)',
+      es: ' (+ SNMP: Imaging Unit)',
     });
     assert.equal(
       formatSupplies(result, 'en'),

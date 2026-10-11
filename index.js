@@ -32,7 +32,9 @@ import {
   buildPrinterContent,
   buildSuppliesContent,
   printerSummary,
+  LANGUAGES,
 } from './src/widgets.js';
+import { STATUS_TEXTS } from './src/status.js';
 
 const gladys = new GladysIntegration();
 
@@ -267,10 +269,12 @@ gladys.onWidgetAction(WIDGET.PRINTER, async (actionKey, params) => {
     logger.debug(`Widget refresh not requested: ${err.message}`);
   }
   const snapshot = getPrinterSnapshot(device.external_id);
-  return {
-    en: `${device.name}: ${printerSummary(snapshot, 'en', config.feature_names).text}`,
-    fr: `${device.name} : ${printerSummary(snapshot, 'fr', config.feature_names).text}`,
-  };
+  return Object.fromEntries(
+    LANGUAGES.map((lang) => [
+      lang,
+      `${device.name}${lang === 'fr' ? ' :' : ':'} ${printerSummary(snapshot, lang, config.feature_names).text}`,
+    ]),
+  );
 });
 
 // --- Configuration updated by the user ---------------------------------------
@@ -307,23 +311,10 @@ gladys.on('connected', async () => {
     // 4) Report the application-level status, shown in the Configuration
     // screen. Zero printer is not an error (the user may not have configured
     // anything yet): stay connected and let the docs guide them.
-    await gladys.setConnectionStatus(
-      true,
-      count === 0
-        ? {
-            en: 'Connected — no printer found yet. Add one in the configuration or run a scan.',
-            fr: 'Connecté — aucune imprimante trouvée pour le moment. Ajoutez-en une dans la configuration ou lancez un scan.',
-          }
-        : undefined,
-    );
+    await gladys.setConnectionStatus(true, count === 0 ? { ...STATUS_TEXTS.noPrinter } : undefined);
   } catch (err) {
     logger.error('Post-connection initialization failed', err);
-    await gladys
-      .setConnectionStatus(false, {
-        en: 'Initialization failed, check the integration logs.',
-        fr: "L'initialisation a échoué, consultez les logs de l'intégration.",
-      })
-      .catch(() => {});
+    await gladys.setConnectionStatus(false, { ...STATUS_TEXTS.initFailed }).catch(() => {});
   }
 });
 

@@ -4,7 +4,9 @@
   "name": "IPP Printers",
   "description": {
     "en": "Ink/toner levels and state of your network printers over IPP (AirPrint). Local, no cloud.",
-    "fr": "Niveaux d'encre/toner et état de vos imprimantes réseau via IPP (AirPrint). Local, sans cloud."
+    "fr": "Niveaux d'encre/toner et état de vos imprimantes réseau via IPP (AirPrint). Local, sans cloud.",
+    "de": "Tinten-/Tonerstände und Status deiner Netzwerkdrucker über IPP (AirPrint). Lokal, ohne Cloud.",
+    "es": "Niveles de tinta/tóner y estado de sus impresoras de red por IPP (AirPrint). Local, sin nube."
   },
   "version": "1.2.1",
   "docker_image": "ghcr.io/guim31/gladys-ipp:1.2.1",
@@ -24,18 +26,24 @@
       "type": "section",
       "label": {
         "en": "How it works",
-        "fr": "Fonctionnement"
+        "fr": "Fonctionnement",
+        "de": "Funktionsweise",
+        "es": "Funcionamiento"
       },
       "description": {
         "en": "Printers advertising IPP (any AirPrint-capable printer) are discovered automatically on your network. You can also list printers manually below — useful when mDNS does not reach them. Each printer exposes one sensor per supply (ink, toner, drum…), plus its state. Levels missing over IPP (all of them, or a laser's drum, fuser, belt and waste container) are read over SNMP, the way CUPS does.",
-        "fr": "Les imprimantes annonçant IPP (toute imprimante compatible AirPrint) sont découvertes automatiquement sur votre réseau. Vous pouvez aussi les déclarer manuellement ci-dessous — utile quand le mDNS ne les atteint pas. Chaque imprimante expose un capteur par consommable (encre, toner, tambour…), plus son état. Les niveaux absents de l'IPP (tous, ou le tambour, le four, la courroie et le récupérateur d'une laser) sont lus en SNMP, comme le fait CUPS."
+        "fr": "Les imprimantes annonçant IPP (toute imprimante compatible AirPrint) sont découvertes automatiquement sur votre réseau. Vous pouvez aussi les déclarer manuellement ci-dessous — utile quand le mDNS ne les atteint pas. Chaque imprimante expose un capteur par consommable (encre, toner, tambour…), plus son état. Les niveaux absents de l'IPP (tous, ou le tambour, le four, la courroie et le récupérateur d'une laser) sont lus en SNMP, comme le fait CUPS.",
+        "de": "Drucker, die IPP anbieten (jeder AirPrint-fähige Drucker), werden in deinem Netzwerk automatisch erkannt. Du kannst Drucker unten auch manuell eintragen — nützlich, wenn mDNS sie nicht erreicht. Jeder Drucker stellt einen Sensor pro Verbrauchsmaterial (Tinte, Toner, Trommel…) sowie seinen Status bereit. Füllstände, die über IPP fehlen (alle oder bei einem Laserdrucker Trommel, Fixiereinheit, Transferband und Resttonerbehälter), werden wie bei CUPS über SNMP gelesen.",
+        "es": "Las impresoras que anuncian IPP (cualquier impresora compatible con AirPrint) se descubren automáticamente en su red. También puede declararlas manualmente a continuación — útil cuando el mDNS no las alcanza. Cada impresora expone un sensor por consumible (tinta, tóner, tambor…), además de su estado. Los niveles que faltan en IPP (todos, o el tambor, el fusor, la correa y el depósito de residuos de una láser) se leen por SNMP, como hace CUPS."
       },
       "links": [
         {
           "url": "https://www.pwg.org/ipp/everywhere.html",
           "label": {
             "en": "About IPP Everywhere",
-            "fr": "À propos d'IPP Everywhere"
+            "fr": "À propos d'IPP Everywhere",
+            "de": "Über IPP Everywhere",
+            "es": "Acerca de IPP Everywhere"
           }
         }
       ]
@@ -45,11 +53,15 @@
       "type": "string",
       "label": {
         "en": "Printers (manual list)",
-        "fr": "Imprimantes (liste manuelle)"
+        "fr": "Imprimantes (liste manuelle)",
+        "de": "Drucker (manuelle Liste)",
+        "es": "Impresoras (lista manual)"
       },
       "description": {
         "en": "Optional. IPs, hostnames or ipp:// URIs, separated by commas — e.g. 192.168.1.20, printer.local, ipp://192.168.1.30/ipp/print.",
-        "fr": "Optionnel. IP, noms d'hôte ou URI ipp://, séparés par des virgules — ex. 192.168.1.20, imprimante.local, ipp://192.168.1.30/ipp/print."
+        "fr": "Optionnel. IP, noms d'hôte ou URI ipp://, séparés par des virgules — ex. 192.168.1.20, imprimante.local, ipp://192.168.1.30/ipp/print.",
+        "de": "Optional. IP-Adressen, Hostnamen oder ipp://-URIs, durch Kommas getrennt — z. B. 192.168.1.20, drucker.local, ipp://192.168.1.30/ipp/print.",
+        "es": "Opcional. IP, nombres de host o URI ipp://, separados por comas — p. ej. 192.168.1.20, impresora.local, ipp://192.168.1.30/ipp/print."
       },
       "required": false
     },
@@ -58,11 +70,15 @@
       "type": "select",
       "label": {
         "en": "Sensor names",
-        "fr": "Noms des capteurs"
+        "fr": "Noms des capteurs",
+        "de": "Sensornamen",
+        "es": "Nombres de los sensores"
       },
       "description": {
         "en": "Applies to newly added devices. Printers report their supplies in their own words (usually English): keep them as-is, or translate the recognized cartridges.",
-        "fr": "S'applique aux appareils nouvellement ajoutés. Les imprimantes annoncent leurs consommables dans leur propre langue (souvent l'anglais) : gardez-les tels quels, ou traduisez les cartouches reconnues."
+        "fr": "S'applique aux appareils nouvellement ajoutés. Les imprimantes annoncent leurs consommables dans leur propre langue (souvent l'anglais) : gardez-les tels quels, ou traduisez les cartouches reconnues.",
+        "de": "Gilt für neu hinzugefügte Geräte. Drucker melden ihre Verbrauchsmaterialien in ihren eigenen Worten (meist auf Englisch): Behalte sie unverändert bei oder übersetze die erkannten Patronen.",
+        "es": "Se aplica a los dispositivos añadidos a partir de ahora. Las impresoras anuncian sus consumibles con sus propias palabras (normalmente en inglés): consérvelos tal cual o traduzca los cartuchos reconocidos."
       },
       "required": false,
       "default": "printer",
@@ -71,21 +87,45 @@
           "value": "printer",
           "label": {
             "en": "As reported by the printer",
-            "fr": "Tels qu'annoncés par l'imprimante"
+            "fr": "Tels qu'annoncés par l'imprimante",
+            "de": "Wie vom Drucker gemeldet",
+            "es": "Tal como los anuncia la impresora"
           }
         },
         {
           "value": "fr",
           "label": {
             "en": "French",
-            "fr": "Français"
+            "fr": "Français",
+            "de": "Französisch",
+            "es": "Francés"
           }
         },
         {
           "value": "en",
           "label": {
             "en": "English",
-            "fr": "Anglais"
+            "fr": "Anglais",
+            "de": "Englisch",
+            "es": "Inglés"
+          }
+        },
+        {
+          "value": "de",
+          "label": {
+            "en": "German",
+            "fr": "Allemand",
+            "de": "Deutsch",
+            "es": "Alemán"
+          }
+        },
+        {
+          "value": "es",
+          "label": {
+            "en": "Spanish",
+            "fr": "Espagnol",
+            "de": "Spanisch",
+            "es": "Español"
           }
         }
       ]
@@ -95,11 +135,15 @@
       "type": "number",
       "label": {
         "en": "Levels refresh interval (s)",
-        "fr": "Rafraîchissement des niveaux (s)"
+        "fr": "Rafraîchissement des niveaux (s)",
+        "de": "Aktualisierung der Füllstände (s)",
+        "es": "Actualización de los niveles (s)"
       },
       "description": {
         "en": "How often the ink/toner levels are recorded, in seconds. They move slowly: 900 s (15 min) is plenty. The printer state is watched continuously (sampled every 15 s) and updated as soon as it changes.",
-        "fr": "Fréquence d'enregistrement des niveaux d'encre/toner, en secondes. Ils évoluent lentement : 900 s (15 min) suffisent largement. L'état de l'imprimante est surveillé en continu (échantillonné toutes les 15 s) et mis à jour dès qu'il change."
+        "fr": "Fréquence d'enregistrement des niveaux d'encre/toner, en secondes. Ils évoluent lentement : 900 s (15 min) suffisent largement. L'état de l'imprimante est surveillé en continu (échantillonné toutes les 15 s) et mis à jour dès qu'il change.",
+        "de": "Wie oft die Tinten-/Tonerstände aufgezeichnet werden, in Sekunden. Die Füllstände ändern sich langsam: 900 s (15 Min.) reichen völlig. Der Druckerstatus wird laufend überwacht (alle 15 s abgefragt) und sofort aktualisiert, wenn er sich ändert.",
+        "es": "Frecuencia de registro de los niveles de tinta/tóner, en segundos. Cambian despacio: 900 s (15 min) es más que suficiente. El estado de la impresora se vigila de forma continua (muestreado cada 15 s) y se actualiza en cuanto cambia."
       },
       "required": false,
       "default": 900,
@@ -112,7 +156,9 @@
       "key": "test_printer",
       "label": {
         "en": "Test a printer",
-        "fr": "Tester une imprimante"
+        "fr": "Tester une imprimante",
+        "de": "Drucker testen",
+        "es": "Probar una impresora"
       },
       "timeout_seconds": 30,
       "fields": [
@@ -121,7 +167,9 @@
           "type": "string",
           "label": {
             "en": "IP, hostname or ipp:// URI",
-            "fr": "IP, nom d'hôte ou URI ipp://"
+            "fr": "IP, nom d'hôte ou URI ipp://",
+            "de": "IP, Hostname oder ipp://-URI",
+            "es": "IP, nombre de host o URI ipp://"
           },
           "required": true
         }
@@ -133,11 +181,15 @@
       "key": "printer",
       "label": {
         "en": "Printer",
-        "fr": "Imprimante"
+        "fr": "Imprimante",
+        "de": "Drucker",
+        "es": "Impresora"
       },
       "description": {
         "en": "Ink/toner gauges, state and last reading of one printer, with a check button.",
-        "fr": "Jauges d'encre/toner, état et dernier relevé d'une imprimante, avec un bouton de vérification."
+        "fr": "Jauges d'encre/toner, état et dernier relevé d'une imprimante, avec un bouton de vérification.",
+        "de": "Tinten-/Tonerstände, Status und letzte Messung eines Druckers, mit einer Prüftaste.",
+        "es": "Indicadores de tinta/tóner, estado y última lectura de una impresora, con un botón de comprobación."
       },
       "icon": "printer",
       "settings": [
@@ -147,11 +199,15 @@
           "source": "devices",
           "label": {
             "en": "Printer",
-            "fr": "Imprimante"
+            "fr": "Imprimante",
+            "de": "Drucker",
+            "es": "Impresora"
           },
           "description": {
             "en": "Leave empty to show the first printer added to Gladys.",
-            "fr": "Laissez vide pour afficher la première imprimante ajoutée à Gladys."
+            "fr": "Laissez vide pour afficher la première imprimante ajoutée à Gladys.",
+            "de": "Leer lassen, um den ersten zu Gladys hinzugefügten Drucker anzuzeigen.",
+            "es": "Déjelo vacío para mostrar la primera impresora añadida a Gladys."
           },
           "required": false
         }
@@ -162,11 +218,15 @@
       "key": "supplies",
       "label": {
         "en": "Supplies",
-        "fr": "Consommables"
+        "fr": "Consommables",
+        "de": "Verbrauchsmaterial",
+        "es": "Consumibles"
       },
       "description": {
         "en": "Every printer at a glance: state and lowest supply, the most critical first.",
-        "fr": "Vos imprimantes d'un coup d'œil : état et consommable le plus bas, les plus critiques d'abord."
+        "fr": "Vos imprimantes d'un coup d'œil : état et consommable le plus bas, les plus critiques d'abord.",
+        "de": "Alle Drucker auf einen Blick: Status und niedrigster Füllstand, die kritischsten zuerst.",
+        "es": "Todas sus impresoras de un vistazo: estado y consumible más bajo, los más críticos primero."
       },
       "icon": "droplet"
     }

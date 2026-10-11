@@ -41,61 +41,137 @@ const MAX_ROWS = 10;
 const TTL_SECONDS = 300;
 
 const TEXTS = {
-  state: { en: 'State', fr: 'État' },
-  lastReading: { en: 'Last reading', fr: 'Dernier relevé' },
-  lowest: { en: 'Lowest level', fr: 'Niveau le plus bas' },
-  toWatch: { en: 'To watch', fr: 'À surveiller' },
-  check: { en: 'Check', fr: 'Vérifier' },
+  state: { en: 'State', fr: 'État', de: 'Status', es: 'Estado' },
+  lastReading: {
+    en: 'Last reading',
+    fr: 'Dernier relevé',
+    de: 'Letzte Messung',
+    es: 'Última lectura',
+  },
+  lowest: {
+    en: 'Lowest level',
+    fr: 'Niveau le plus bas',
+    de: 'Niedrigster Stand',
+    es: 'Nivel más bajo',
+  },
+  toWatch: { en: 'To watch', fr: 'À surveiller', de: 'Zu beobachten', es: 'A vigilar' },
+  check: { en: 'Check', fr: 'Vérifier', de: 'Prüfen', es: 'Comprobar' },
   noPrinter: {
     en: 'No printer yet: add one from the Discovery tab.',
     fr: "Aucune imprimante : ajoutez-en depuis l'onglet Découverte.",
+    de: 'Noch kein Drucker: Füge einen über den Tab Entdecken hinzu.',
+    es: 'Aún no hay impresoras: añada una desde la pestaña Descubrir.',
   },
   missingPrinter: {
     en: 'This printer no longer exists: pick another one in the widget settings.',
     fr: "Cette imprimante n'existe plus : choisissez-en une autre dans les réglages du widget.",
+    de: 'Dieser Drucker existiert nicht mehr: Wähle in den Widget-Einstellungen einen anderen.',
+    es: 'Esta impresora ya no existe: elija otra en la configuración del widget.',
   },
-  waiting: { en: 'Waiting for the first reading', fr: 'En attente du premier relevé' },
-  noLevel: { en: 'No level reported', fr: 'Aucun niveau annoncé' },
+  waiting: {
+    en: 'Waiting for the first reading',
+    fr: 'En attente du premier relevé',
+    de: 'Warten auf die erste Messung',
+    es: 'Esperando la primera lectura',
+  },
+  noLevel: {
+    en: 'No level reported',
+    fr: 'Aucun niveau annoncé',
+    de: 'Kein Füllstand gemeldet',
+    es: 'Ningún nivel informado',
+  },
   states: {
-    idle: { en: 'Idle', fr: 'Prête' },
-    printing: { en: 'Printing', fr: 'Impression' },
-    stopped: { en: 'Stopped', fr: 'Arrêtée' },
-    unknown: { en: 'Unknown', fr: 'Inconnu' },
+    idle: { en: 'Idle', fr: 'Prête', de: 'Bereit', es: 'Lista' },
+    printing: { en: 'Printing', fr: 'Impression', de: 'Druckt', es: 'Imprimiendo' },
+    stopped: { en: 'Stopped', fr: 'Arrêtée', de: 'Gestoppt', es: 'Detenida' },
+    unknown: { en: 'Unknown', fr: 'Inconnu', de: 'Unbekannt', es: 'Desconocido' },
   },
   // The most common printer-state-reasons (severity suffix already removed
   // by cleanStateReasons); any other one is shown as reported.
   reasons: {
-    'toner-low': { en: 'toner low', fr: 'toner bas' },
-    'toner-empty': { en: 'toner empty', fr: 'toner vide' },
-    'marker-supply-low': { en: 'supply low', fr: 'consommable bas' },
-    'marker-supply-empty': { en: 'supply empty', fr: 'consommable vide' },
-    'marker-waste-almost-full': { en: 'waste almost full', fr: 'récupérateur presque plein' },
-    'marker-waste-full': { en: 'waste full', fr: 'récupérateur plein' },
-    'media-empty': { en: 'out of paper', fr: 'plus de papier' },
-    'media-low': { en: 'paper low', fr: 'papier bas' },
-    'media-jam': { en: 'paper jam', fr: 'bourrage papier' },
-    'media-needed': { en: 'paper needed', fr: 'papier requis' },
-    'door-open': { en: 'door open', fr: 'porte ouverte' },
-    'cover-open': { en: 'cover open', fr: 'capot ouvert' },
-    'input-tray-missing': { en: 'tray missing', fr: 'bac absent' },
-    'output-area-full': { en: 'output tray full', fr: 'bac de sortie plein' },
-    offline: { en: 'offline', fr: 'hors ligne' },
-    paused: { en: 'paused', fr: 'en pause' },
+    'toner-low': { en: 'toner low', fr: 'toner bas', de: 'Toner niedrig', es: 'tóner bajo' },
+    'toner-empty': { en: 'toner empty', fr: 'toner vide', de: 'Toner leer', es: 'tóner agotado' },
+    'marker-supply-low': {
+      en: 'supply low',
+      fr: 'consommable bas',
+      de: 'Verbrauchsmaterial niedrig',
+      es: 'consumible bajo',
+    },
+    'marker-supply-empty': {
+      en: 'supply empty',
+      fr: 'consommable vide',
+      de: 'Verbrauchsmaterial leer',
+      es: 'consumible agotado',
+    },
+    'marker-waste-almost-full': {
+      en: 'waste almost full',
+      fr: 'récupérateur presque plein',
+      de: 'Restbehälter fast voll',
+      es: 'depósito casi lleno',
+    },
+    'marker-waste-full': {
+      en: 'waste full',
+      fr: 'récupérateur plein',
+      de: 'Restbehälter voll',
+      es: 'depósito lleno',
+    },
+    'media-empty': { en: 'out of paper', fr: 'plus de papier', de: 'kein Papier', es: 'sin papel' },
+    'media-low': { en: 'paper low', fr: 'papier bas', de: 'wenig Papier', es: 'poco papel' },
+    'media-jam': {
+      en: 'paper jam',
+      fr: 'bourrage papier',
+      de: 'Papierstau',
+      es: 'atasco de papel',
+    },
+    'media-needed': {
+      en: 'paper needed',
+      fr: 'papier requis',
+      de: 'Papier benötigt',
+      es: 'papel necesario',
+    },
+    'door-open': { en: 'door open', fr: 'porte ouverte', de: 'Tür offen', es: 'puerta abierta' },
+    'cover-open': {
+      en: 'cover open',
+      fr: 'capot ouvert',
+      de: 'Abdeckung offen',
+      es: 'tapa abierta',
+    },
+    'input-tray-missing': {
+      en: 'tray missing',
+      fr: 'bac absent',
+      de: 'Fach fehlt',
+      es: 'falta la bandeja',
+    },
+    'output-area-full': {
+      en: 'output tray full',
+      fr: 'bac de sortie plein',
+      de: 'Ausgabefach voll',
+      es: 'bandeja de salida llena',
+    },
+    offline: { en: 'offline', fr: 'hors ligne', de: 'offline', es: 'sin conexión' },
+    paused: { en: 'paused', fr: 'en pause', de: 'angehalten', es: 'en pausa' },
   },
 };
 
+/** Languages of the widget texts; every other one gets English. */
+export const LANGUAGES = ['en', 'fr', 'de', 'es'];
+
+const LOCALES = { en: 'en-GB', fr: 'fr-FR', de: 'de-DE', es: 'es-ES' };
+
+/** Widget texts, exported for the translation tests. */
+export { TEXTS as WIDGET_TEXTS };
+
 /**
- * The language a widget is rendered in: French, or English for everything
- * else (the texts above only exist in these two).
+ * The language a widget is rendered in: French, German, Spanish, or
+ * English for everything else (the texts above only exist in these four).
  * @param {string} language ISO 639-1 code sent by the core
- * @returns {'fr'|'en'}
+ * @returns {'en'|'fr'|'de'|'es'}
  */
 export function localeOf(language) {
-  return String(language ?? '')
+  const code = String(language ?? '')
     .toLowerCase()
-    .startsWith('fr')
-    ? 'fr'
-    : 'en';
+    .slice(0, 2);
+  return LANGUAGES.includes(code) ? code : 'en';
 }
 
 /**
@@ -243,7 +319,7 @@ export function splitLevels(known) {
  * @returns {string}
  */
 export function formatReadingTime(at, language, now = Date.now()) {
-  const locale = localeOf(language) === 'fr' ? 'fr-FR' : 'en-GB';
+  const locale = LOCALES[localeOf(language)];
   const date = new Date(at);
   const sameDay = date.toDateString() === new Date(now).toDateString();
   const options = sameDay
@@ -354,7 +430,7 @@ export function printerGauges(device, snapshot, featureNames) {
 
 /**
  * A widget with nothing to show but a sentence.
- * @param {{ en: string, fr: string }} text
+ * @param {{ en: string, fr: string, de: string, es: string }} text
  * @returns {object} the content
  */
 function messageContent(text) {
