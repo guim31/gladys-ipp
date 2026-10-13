@@ -33,8 +33,11 @@ Built from the official
   not answer is left alone for 30 minutes, one that answers with nothing to
   add for 6 hours. The _Test a printer_ action tells where each level comes
   from (`(via SNMP)`, `(+ SNMP: Imaging Unit)`).
-- **Polling** at a configurable interval; the working IPP URL is stored in
-  the device params, so polling survives restarts without a re-discovery.
+- **Polling** by the integration itself: the state every 15 seconds
+  (published on change), the levels at a configurable interval. It does not
+  depend on the Gladys scheduler (Gladys 5.2.0 skips devices created without
+  polling enabled); the working IPP URL is stored in the device params, so
+  polling survives restarts without a re-discovery.
 - **Test a printer** action: probe any host from the Configuration screen and
   see the model, state and levels it answers.
 - **Two dashboard widgets** (Gladys ≥ 5.1): _Printer_ — one printer with a
@@ -60,6 +63,7 @@ Built from the official
 │  │  └─ supplies.js                 # Printer MIB (RFC 3805) -> supply rows
 │  ├─ printer.js                     # raw IPP attributes -> printer model (markers, state)
 │  ├─ supplies.js                    # SNMP fallback + parts complement
+│  ├─ app.js                         # SDK handlers, own sampling loop, onPoll fallback
 │  ├─ device.js                      # printer model -> Gladys device + states, polling, snapshots
 │  ├─ widgets.js                     # dashboard widget contents (pure builders)
 │  ├─ discovery.js                   # manual list + mDNS -> probed printers

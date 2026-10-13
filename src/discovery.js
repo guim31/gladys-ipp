@@ -7,7 +7,7 @@
 // the IPP probe — is done here.
 // -----------------------------------------------------------------------------
 
-import { createLogger } from '@gladysassistant/integration-sdk';
+import { createLogger, parseMdnsTxt } from '@gladysassistant/integration-sdk';
 import { probePrinter } from './ipp/client.js';
 import { parsePrinterHosts } from './config.js';
 import { parsePrinter } from './printer.js';
@@ -36,7 +36,14 @@ export function isIppServiceEntry(entry) {
 /**
  * Build the candidate URL of an mDNS `_ipp._tcp` service instance.
  * The TXT record `rp` carries the resource path (e.g. 'ipp/print').
- * @param {{ host: string, addresses?: string[], port?: number, txt?: Record<string, string> }} entry
+ *
+ * The core hands the TXT record over RAW, as an array of 'key=value'
+ * strings (networkDiscovery.scanMdns.js, Gladys 5.2.0): parseMdnsTxt reads
+ * it. Up to 1.3.0 the integration read it as an object, so `rp` was never
+ * seen and every mDNS printer was probed on 'ipp/print'. An object is still
+ * accepted (keys case-insensitive), should a core ever send one.
+ * @param {{ host: string, addresses?: string[], port?: number,
+ *           txt?: string[]|Record<string, string> }} entry
  * @returns {string|null}
  */
 export function mdnsCandidateUrl(entry) {
@@ -45,8 +52,11 @@ export function mdnsCandidateUrl(entry) {
     return null;
   }
   const port = entry.port || 631;
-  const txt = entry.txt ?? {};
-  const rp = String(txt.rp ?? txt.RP ?? 'ipp/print').replace(/^\/+/, '');
+  const txt = Array.isArray(entry.txt)
+    ? parseMdnsTxt(entry.txt)
+    : Object.fromEntries(Object.entries(entry.txt ?? {}).map(([k, v]) => [k.toLowerCase(), v]));
+  // 'rp=' (empty) is the root resource; no rp, or a bare 'rp', the usual path.
+  const rp = typeof txt.rp === 'string' ? txt.rp.replace(/^\/+/, '') : 'ipp/print';
   return `http://${address}:${port}/${rp}`;
 }
 

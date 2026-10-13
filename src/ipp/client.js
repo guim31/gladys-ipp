@@ -173,10 +173,12 @@ export async function getPrinterAttributes(url, options = {}) {
       logger.debug(`Get-Printer-Attributes (${variant.label}) -> ${url}`);
       const attributes = await requestWithVariant(url, variant, timeoutMs);
       if (hasSupplyAttributes(attributes) || supplySweepDone.has(url)) {
-        workingVariant.set(url, index);
-        if (index !== 0) {
+        // Logged once, when the variant is found (or changes), not at
+        // every sample of a printer that needs it.
+        if (index !== 0 && known !== index) {
           logger.info(`${url} answered with the ${variant.label} compatibility variant`);
         }
+        workingVariant.set(url, index);
         return attributes;
       }
       // Some firmwares (Epson EcoTank...) omit marker-* when the request
