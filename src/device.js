@@ -12,6 +12,7 @@
 
 import {
   createLogger,
+  DEVICE_POLL_FREQUENCIES,
   DEVICE_FEATURE_CATEGORIES,
   DEVICE_FEATURE_TYPES,
   DEVICE_FEATURE_UNITS,
@@ -25,12 +26,12 @@ export const DEVICE_TYPE = 'printer';
 export const PRINTER_URL_PARAM = 'PRINTER_URL';
 export const STATE_FEATURE_KEY = 'state';
 
-// Gladys only accepts poll_frequency values from its own list (in ms):
-// [60000, 30000, 15000, 10000, 2000, 1000]. One minute is the slowest, and it
-// is what we want: the printer is queried every minute so the STATE stays
-// current, while the supply LEVELS are only published every
-// config.poll_frequency seconds (see pollPrinter).
-export const DEVICE_POLL_FREQUENCY_MS = 60_000;
+// Gladys only accepts poll_frequency values from its own list (in ms,
+// DEVICE_POLL_FREQUENCIES). One minute is the slowest. The integration does
+// NOT rely on it: its own loop samples every created printer (src/app.js),
+// and onPoll is only a fallback. Gladys 5.2.0 never polls a device created
+// without should_poll, and re-publishing does not update a created device.
+export const DEVICE_POLL_FREQUENCY_MS = DEVICE_POLL_FREQUENCIES.EVERY_MINUTES;
 
 // Timestamp of the last LEVELS publish, per device external_id. Only the
 // levels are throttled: they keep history, so publishing them on every sample
@@ -224,8 +225,8 @@ export function isPrinterDevice(device) {
  * When the supplies changed (cartridge swap, renamed supply...), the device
  * is re-published first so the new features exist before their states arrive.
  *
- * Called both by the Gladys scheduler and by the integration's own sampling
- * loop (every STATE_SAMPLING_MS, see index.js): a print job lasts seconds,
+ * Called by the integration's own sampling loop (every STATE_SAMPLING_MS,
+ * see src/app.js), and by onPoll as a fallback: a print job lasts seconds,
  * so the state must be sampled far more often than it is worth storing.
  * Publication is decoupled from sampling:
  *   - the STATE is published when it CHANGES (it keeps no history, and
@@ -304,7 +305,7 @@ async function samplePrinter(gladys, device, config, deps) {
   const states = buildPrinterStates(gladys, probed, { withLevels });
   if (withLevels) {
     lastLevelsAt.set(device.external_id, now());
-    logger.info(
+    logger.debug(
       `Poll ${device.external_id}: ${printer.stateText}, ` +
         `${
           printer.markers
@@ -313,7 +314,7 @@ async function samplePrinter(gladys, device, config, deps) {
         }`,
     );
   } else {
-    logger.info(`Poll ${device.external_id}: state -> "${printer.stateText}"`);
+    logger.debug(`Poll ${device.external_id}: state -> "${printer.stateText}"`);
   }
   await gladys.publishStates(states);
   lastStateText.set(device.external_id, printer.stateText);

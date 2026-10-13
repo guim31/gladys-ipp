@@ -100,6 +100,6 @@ export async function readSnmpSupplies(host, options = {}) {
       high: maxByIndex.get(index),
     };
   });
-  logger.info(`SNMP: ${supplies.length} supply row(s) read from ${host}`);
+  logger.debug(`SNMP: ${supplies.length} supply row(s) read from ${host}`);
   return supplies;
 }

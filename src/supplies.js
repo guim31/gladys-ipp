@@ -55,8 +55,25 @@ export const PART_TYPES = new Set([
 const snmpMisses = new Map();
 
 /** Reset the SNMP back-off (tests only). */
+// Last SNMP outcome logged in info, per host: the same outcome comes back
+// at every levels reading (an SNMP-only printer, a drum read at each
+// reading), so it is written in info when it changes — another kind of
+// answer, other supplies; not a mere level move — and in debug after.
+const lastOutcome = new Map();
+
+function logOutcome(host, kind, markers, message) {
+  const outcome = `${kind}:${markers.map((m) => m.key ?? m.name).join(',')}`;
+  if (lastOutcome.get(host) === outcome) {
+    logger.debug(message);
+    return;
+  }
+  lastOutcome.set(host, outcome);
+  logger.info(message);
+}
+
 export function resetSupplyFallback() {
   snmpMisses.clear();
+  lastOutcome.clear();
 }
 
 /**
@@ -166,7 +183,7 @@ export async function withFallbackSupplies(printer, url, deps = {}) {
   if (rows.length === 0) {
     snmpMisses.set(host, { at: now(), delay: SNMP_RETRY_MS });
     if (printer.markers.length === 0) {
-      logger.info(`${host} announces no supply over IPP nor SNMP`);
+      logOutcome(host, 'none', [], `${host} announces no supply over IPP nor SNMP`);
     } else {
       logger.debug(`${host}: no SNMP answer, IPP supplies only`);
     }
@@ -176,7 +193,12 @@ export async function withFallbackSupplies(printer, url, deps = {}) {
   if (printer.markers.length === 0) {
     snmpMisses.delete(host);
     const markers = buildMarkers(rows);
-    logger.info(`${host}: ${markers.length} supply(ies) read over SNMP (${describe(markers)})`);
+    logOutcome(
+      host,
+      'snmp',
+      markers,
+      `${host}: ${markers.length} supply(ies) read over SNMP (${describe(markers)})`,
+    );
     return { ...printer, markers, supplySource: 'snmp' };
   }
 
@@ -195,6 +217,11 @@ export async function withFallbackSupplies(printer, url, deps = {}) {
     logger.debug(`${host}: SNMP lists no part IPP does not already announce`);
     return printer;
   }
-  logger.info(`${host}: ${extra.length} part(s) added from SNMP (${describe(extra)})`);
+  logOutcome(
+    host,
+    'complement',
+    extra,
+    `${host}: ${extra.length} part(s) added from SNMP (${describe(extra)})`,
+  );
   return { ...printer, markers: [...printer.markers, ...extra], supplySource: 'ipp+snmp' };
 }

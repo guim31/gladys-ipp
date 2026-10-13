@@ -306,6 +306,18 @@ test('mdnsCandidateUrl skips IPv6 addresses and defaults the path', () => {
   assert.equal(url, 'http://192.168.1.31:631/ipp/print');
 });
 
+test('mdnsCandidateUrl reads the raw TXT entries the core sends (Gladys 5.2.0)', () => {
+  const entry = (txt) => ({ host: 'printer.local', addresses: ['192.0.2.32'], port: 631, txt });
+  // The resource path of the printer, not the usual one: ignored up to 1.3.0.
+  assert.equal(
+    mdnsCandidateUrl(entry(['txtvers=1', 'RP=ipp/printer', 'ty=Brother'])),
+    'http://192.0.2.32:631/ipp/printer',
+  );
+  assert.equal(mdnsCandidateUrl(entry(['rp='])), 'http://192.0.2.32:631/');
+  assert.equal(mdnsCandidateUrl(entry(['rp'])), 'http://192.0.2.32:631/ipp/print');
+  assert.equal(mdnsCandidateUrl(entry([])), 'http://192.0.2.32:631/ipp/print');
+});
+
 test('discoverPrinters merges manual targets and mDNS, dedupes by printer', async () => {
   const gladys = createFakeGladys({
     mdnsEntries: [

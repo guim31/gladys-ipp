@@ -2,17 +2,16 @@
 
 Niveaux d'encre/toner et état de vos imprimantes réseau via IPP (AirPrint). Local, sans cloud.
 
-Intégration externe pour [Gladys Assistant](https://gladysassistant.com), bâtie sur le template officiel `GladysAssistant/integration-template-js` (SDK `@gladysassistant/integration-sdk` ^0.14.0, `gladys_version` `>=5.1.0`). Mainteneur : Guilhem (`guim31`).
+Intégration externe pour [Gladys Assistant](https://gladysassistant.com), bâtie sur le template officiel `GladysAssistant/integration-template-js` (SDK `@gladysassistant/integration-sdk` ^0.15.0, `gladys_version` `>=5.1.0`). Mainteneur : Guilhem (`guim31`).
 
 Ce fichier rassemble ce qu'une session de code doit savoir et qui ne se lit pas dans le code : choix de conception, faits vérifiés en réel, pièges déjà payés. Le compléter quand un nouveau piège est découvert.
 
-## État au 09/10/2026
+## État au 13/10/2026
 
-Version 1.2.0 publiée (SDK ^0.14.0, `gladys_version >=5.1.0`) : widgets `printer` et `supplies`,
-complément SNMP des pièces. Le testeur JPPUYB confirme le tambour de sa Samsung M262x. La branche
-`fix/widget-all-supplies` corrige ses deux retours sur le widget `printer` (cartouches poussées
-hors des jauges par les pièces, deux jauges « Rouleau ») et traduit les raisons d'état. Non
-testée sur une vraie imprimante.
+Version 1.3.0 publiée (SDK ^0.14.0, `gladys_version >=5.1.0`) : widgets `printer` et `supplies`,
+complément SNMP des pièces, quatre langues. Le testeur JPPUYB confirme le tambour de sa Samsung
+M262x. La branche `chore/sdk-0.15` (SDK ^0.15.0, polling indépendant du cœur, logs calmes,
+chemin `rp` du mDNS enfin lu) attend la relecture de Guilhem. Non testée sur une vraie imprimante.
 
 ## Notes de conception
 
@@ -32,7 +31,31 @@ testée sur une vraie imprimante.
   « Vérifier » et le tick de la boucle partagent la même promesse au lieu de doubler la requête
   IPP et la publication. `action_timeout_seconds` du widget vaut 60 : un poll forcé peut
   enchaîner plusieurs variantes IPP à 10 s chacune puis le repli SNMP.
-- `pollPrinter` renvoie `{ published, stateChanged, withLevels }` : `index.js` envoie
+- **Câblage** : tous les gestionnaires du SDK sont posés par `registerIntegration(gladys, deps)`
+  (`src/app.js`) ; `index.js` ne fait que créer le client, appeler cette fonction, gérer l'arrêt
+  et se connecter. `test/app.test.js` la monte sur le faux Gladys du SDK
+  (`@gladysassistant/integration-sdk/testing`), IPP, horloge et minuteurs injectés.
+- **Polling** : la boucle de `src/app.js` (`STATE_SAMPLING_MS`, 15 s, auto-planifiée : le tour
+  suivant n'est armé qu'à la fin du précédent) est **la** cadence de l'intégration, pas un
+  complément : Gladys 5.2.0 ne sonde pas un appareil créé sans `should_poll` (issue
+  GladysAssistant/Gladys#3198, correctif #3199 non publié au 13/10), et republier ne change
+  jamais `should_poll` / `poll_frequency` d'un appareil déjà créé. Les appareils publient
+  toujours `should_poll: true` + `DEVICE_POLL_FREQUENCIES.EVERY_MINUTES` ; `onPoll` reste en
+  **repli** et ne relit pas une imprimante échantillonnée depuis moins de `ON_POLL_SKIP_MS`
+  (30 s). Un test le vérifie sur un appareil créé sans `should_poll`.
+- **Logs** : au niveau `info`, seulement le cycle de vie (démarrage, découverte, boucle armée,
+  appareil ajouté, configuration, action de test, appareil re-publié). Un relevé, un état
+  publié, une lecture SNMP passent en `debug`. Une imprimante qui ne répond plus : un `warn` au
+  premier échec, un `info` à son retour, du `debug` entre les deux (`unreachable` dans
+  `app.js`). L'issue d'une lecture SNMP n'est écrite en `info` que si elle change d'espèce ou
+  de consommables (`logOutcome`, `supplies.js`), pas à chaque niveau ; la variante IPP de
+  compatibilité, une fois trouvée. `test/app.test.js` vérifie qu'un cycle normal n'écrit rien
+  en `info`.
+- **TXT mDNS** : le cœur rend le TXT **brut**, tableau de chaînes `key=value`
+  (`networkDiscovery.scanMdns.js`, 5.2.0). Jusqu'en 1.3.0 l'intégration le lisait comme un objet :
+  `rp` n'était jamais vu et toute imprimante mDNS était sondée sur `ipp/print`.
+  `mdnsCandidateUrl` passe par `parseMdnsTxt` du SDK (accepte encore un objet).
+- `pollPrinter` renvoie `{ published, stateChanged, withLevels }` : `app.js` envoie
   `requestWidgetRefresh` aux deux widgets quand un état a changé (les jauges liées suivent les
   états toutes seules, mais les lignes d'état et la liste des consommables sont en cache côté
   cœur jusqu'à `ttl_seconds` = 300).
@@ -137,6 +160,10 @@ d'une Samsung mono absente), confirmé sur sa Samsung M262x (tambour à 10 %).
 - Une session de code n'a **ni instance Gladys ni appareil réel**. La suite de tests, le lint et
   le validateur du store sont les seules vérifications possibles : le test réel passe par
   Guilhem ou par les testeurs du forum. Le dire, plutôt que de conclure que « ça marche ».
+- `CHANGELOG.md` (créé le 13/10/2026) : décrire chaque changement sous `## [Unreleased]`.
+  Attention, ce dépôt a encore les anciens workflows (`ci`, `build`, `release`) et pas
+  `.github/scripts/release.mjs` : `outils/release.sh` ne marche pas tel quel ici, et
+  `release.yml` ne lit pas `CHANGELOG.md` (notes générées depuis les PR).
 - **Publier est un geste de Guilhem** : Actions → Release (patch, minor ou major) construit
   l'image `ghcr.io/guim31/<dépôt>`, monte la version du manifeste et pose le tag. Un correctif
   poussé sur `main` sans Release n'atteint aucune installation : le signaler.
@@ -157,7 +184,9 @@ Vérifiés dans le code du cœur ou payés sur une intégration publiée. Ils va
   `poll_frequency` vaut une valeur de la liste fixe (1000, 2000, 10000, 15000, 30000, 60000 ms).
   Publier seulement `poll_frequency` donne un appareil accepté mais jamais interrogé. Pour une
   cadence hors liste, publier `should_poll: false` et pousser les états depuis le conteneur, en
-  gardant un `onPoll` de repli.
+  gardant un `onPoll` de repli. Et ces deux champs sont lus **à la création** : un appareil créé
+  sans eux ne sera jamais sondé, même après correction (#3198) — toute intégration qui compte
+  sur `onPoll` doit sonder elle-même par un minuteur interne.
 - **`min` et `max` sont NOT NULL** dans `t_device_feature`, y compris pour `text/text` : sans eux,
   « Ajouter à Gladys » échoue en HTTP 422. Mettre 0/0, comme Zigbee2MQTT.
 - `level-sensor/decimal` n'existe pas côté serveur. `light-sensor/binary` n'a pas de libellé dans

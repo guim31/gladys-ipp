@@ -111,7 +111,8 @@ test('the manifest version matches package.json', async () => {
 
 // --- Dashboard widgets --------------------------------------------------------
 
-const indexSource = await readFile(new URL('../index.js', import.meta.url), 'utf8');
+// The handlers are registered by src/app.js (index.js only starts the SDK).
+const indexSource = await readFile(new URL('../src/app.js', import.meta.url), 'utf8');
 
 test('every declared widget has a handler, and every handler a declaration', () => {
   assert.deepEqual(

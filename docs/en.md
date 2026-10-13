@@ -132,8 +132,11 @@ a name: without a recognized qualifier, the raw printer name or a number
   (`ipps://`) by itself when the printer requires it (HTTP 426). If
   everything fails, the "Test a printer" button shows the exact error —
   paste it on the forum.
-- **Non-standard IPP path**: by default the integration tries `/ipp/print`,
+- **Non-standard IPP path**: a printer found on the network is queried on
+  the path it announces; otherwise the integration tries `/ipp/print`,
   `/ipp` then `/`. If your printer uses another path (some CUPS queues for
   instance), type the full URI: `ipp://host:631/the/path`.
-- The integration logs (Gladys UI or `docker logs`, with `LOG_LEVEL=debug`
-  for full detail) trace every request and every skipped printer.
+- The integration logs (Gladys UI or `docker logs`) stay quiet at the default
+  level: start, discoveries, a printer that stops answering then comes back
+  (one line each), your actions. With `LOG_LEVEL=debug` they trace every
+  reading, every request and every skipped printer.

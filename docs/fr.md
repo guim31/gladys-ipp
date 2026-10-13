@@ -145,10 +145,12 @@ l'imprimante ou un numéro (« Rouleau 1 », « Rouleau 2 ») les départage.
   sans liste d'attributs) et bascule d'elle-même en IPP chiffré (`ipps://`)
   quand l'imprimante l'exige (HTTP 426). Si tout échoue, le bouton « Tester
   une imprimante » affiche l'erreur exacte — collez-la sur le forum.
-- **Chemin IPP non standard** : par défaut l'intégration essaie
+- **Chemin IPP non standard** : une imprimante trouvée sur le réseau est
+  interrogée sur le chemin qu'elle annonce ; sinon l'intégration essaie
   `/ipp/print`, `/ipp` puis `/`. Si votre imprimante utilise un autre chemin
   (certaines files CUPS par exemple), saisissez l'URI complète :
   `ipp://hôte:631/le/chemin`.
-- Les logs de l'intégration (UI Gladys ou `docker logs`, avec
-  `LOG_LEVEL=debug` pour le détail) tracent chaque requête et chaque
-  imprimante ignorée.
+- Les logs de l'intégration (UI Gladys ou `docker logs`) restent calmes au
+  niveau par défaut : démarrage, découvertes, imprimante qui ne répond plus
+  puis qui revient (une ligne chacune), vos actions. Avec `LOG_LEVEL=debug`,
+  ils tracent chaque relevé, chaque requête et chaque imprimante ignorée.
